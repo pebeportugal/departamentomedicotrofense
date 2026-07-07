@@ -1523,6 +1523,35 @@
                         </table>
                     </div>
                 </div>
+
+                <!-- VALORES DIÁRIOS DE WELLNESS & CARGA INTERNA (PSE) DO PLANTEL -->
+                <div class="card col-12" id="card-complete-wellness-table" style="margin-top: 20px;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 class="card-title" style="margin:0;"><i data-lucide="shield-alert"></i> Matriz Diária de Wellness & Carga Interna (PSE) do Plantel</h3>
+                        <button class="btn-toggle-print no-print" onclick="toggleCardPrint(this)" title="Ocultar do Relatório PDF"><i data-lucide="eye"></i></button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="trofense-table" style="font-size: 11px; width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th>Atleta</th>
+                                    <th style="text-align: center;">Sono</th>
+                                    <th style="text-align: center;">Fadiga</th>
+                                    <th style="text-align: center;">Stress</th>
+                                    <th style="text-align: center;">Humor</th>
+                                    <th style="text-align: left;">Regiões de Dor (Score >= 2)</th>
+                                    <th style="text-align: center;">PSE (1-10)</th>
+                                    <th style="text-align: center;">Duração (min)</th>
+                                    <th style="text-align: center;">sRPE (A.U.)</th>
+                                    <th style="text-align: left;">Tratamento / Alerta Clínico</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pos-general-wellness-tbody">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
 
             <!-- INDIVIDUAL VIEW -->
@@ -2208,6 +2237,12 @@
                             Exibir Atletas Excluídos
                         </label>
                     </div>
+                    <div class="filter-group" style="display: flex; align-items: center; margin-top: 14px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size:12.5px; font-weight:600; color: var(--text-primary);">
+                            <input type="checkbox" id="report-omit-microcycle-chk" onchange="renderReport()">
+                            Omitir Dia do Microciclo
+                        </label>
+                    </div>
                     <button class="btn btn-primary" onclick="window.print()" style="margin-top:14px; height: 35px; display: inline-flex; align-items: center; gap: 6px;">
                         <i data-lucide="printer"></i> Imprimir PDF (A4)
                     </button>
@@ -2317,6 +2352,26 @@
                             <span style="font-size: 9px; font-weight: 700; text-transform: uppercase; color: #64748b;">Fresh Index</span>
                             <div id="report-fresh-value" style="font-size: 18px; font-weight: 800; margin-top: 4px;">+182</div>
                         </div>
+                    </div>
+
+                    <!-- TABELA DE MONITORIZAÇÃO WELLNESS E PSE -->
+                    <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 12px; margin-bottom: 24px; page-break-inside: avoid;">
+                        <span style="font-size: 9.5px; font-weight: 700; color: var(--trofense-blue); text-transform: uppercase; display: block; margin-bottom: 8px;">
+                            <i data-lucide="shield-alert" style="width:11px; height:11px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Monitorização de Wellness & Carga Interna (PSE)
+                        </span>
+                        <table class="trofense-table" style="font-size: 11px; width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="padding: 6px 8px; text-align: left;">Parâmetro / Métrica</th>
+                                    <th style="padding: 6px 8px; text-align: center;">Registo Hoje</th>
+                                    <th style="padding: 6px 8px; text-align: center;">Média Época</th>
+                                    <th style="padding: 6px 8px; text-align: left;">Tratamento / Análise Clínica</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-wellness-table-body">
+                                <!-- Preenchido dinamicamente -->
+                            </tbody>
+                        </table>
                     </div>
 
                     <h3 id="report-comparison-title" style="font-size: 11px; font-weight: 700; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; text-transform: uppercase; color: var(--trofense-blue);">
@@ -4248,6 +4303,7 @@
 
             updatePosTreinoKPIs();
             renderPosGeneralMetricsTable();
+            renderPosGeneralWellnessTable();
             updateIndividualTargetsUI();
 
             renderJogoView();
@@ -4566,6 +4622,131 @@
                 `;
                 body.appendChild(tr);
             });
+        }
+
+        function renderPosGeneralWellnessTable() {
+            const body = document.getElementById('pos-general-wellness-tbody');
+            if (!body) return;
+            body.innerHTML = '';
+
+            const roster = getFilteredRoster(false);
+            const todayWellness = appState.wellnessData.filter(w => w.date === appState.currentDate);
+            const todayGps = appState.gpsData.filter(g => g.date === appState.currentDate);
+
+            let countEntries = 0;
+
+            roster.forEach(p => {
+                const w = todayWellness.find(row => row.name === p.name);
+                const g = todayGps.find(row => row.name === p.name);
+
+                if (p.status !== 'Ativo' && p.status !== 'Formação') return;
+
+                countEntries++;
+                const tr = document.createElement('tr');
+
+                let sonoHtml = '-';
+                let fadigaHtml = '-';
+                let stressHtml = '-';
+                let humorHtml = '-';
+                let painHtml = '<span style="color:#94a3b8;">Sem queixas</span>';
+                let pseHtml = '-';
+                let durationHtml = '-';
+                let srpeHtml = '-';
+                let statusHtml = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">OK</span>';
+
+                const allPlayerW = appState.wellnessData.filter(row => row.name === p.name);
+                const avgSonoVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, row) => sum + (row.sono || 0), 0) / allPlayerW.length) : 0;
+                const avgFadigaVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, row) => sum + (row.fadiga || 0), 0) / allPlayerW.length) : 0;
+                const avgStressVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, row) => sum + (row.stress || 0), 0) / allPlayerW.length) : 0;
+                const avgHumorVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, row) => sum + (row.humor || 0), 0) / allPlayerW.length) : 0;
+
+                if (w) {
+                    // Sono
+                    if (w.sono < 3) {
+                        sonoHtml = `<span class="status-badge badge-red" style="font-weight:700;">${w.sono}</span>`;
+                    } else if (w.sono < (avgSonoVal - 0.7)) {
+                        sonoHtml = `<span class="status-badge badge-yellow" style="font-weight:700;">${w.sono}</span>`;
+                    } else {
+                        sonoHtml = `<span style="font-weight:600; color:#1e293b;">${w.sono}</span>`;
+                    }
+
+                    // Fadiga
+                    if (w.fadiga < 3) {
+                        fadigaHtml = `<span class="status-badge badge-red" style="font-weight:700;">${w.fadiga}</span>`;
+                    } else if (w.fadiga < (avgFadigaVal - 0.7)) {
+                        fadigaHtml = `<span class="status-badge badge-yellow" style="font-weight:700;">${w.fadiga}</span>`;
+                    } else {
+                        fadigaHtml = `<span style="font-weight:600; color:#1e293b;">${w.fadiga}</span>`;
+                    }
+
+                    // Stress
+                    if (w.stress < 3) {
+                        stressHtml = `<span class="status-badge badge-red" style="font-weight:700;">${w.stress}</span>`;
+                    } else if (w.stress < (avgStressVal - 0.7)) {
+                        stressHtml = `<span class="status-badge badge-yellow" style="font-weight:700;">${w.stress}</span>`;
+                    } else {
+                        stressHtml = `<span style="font-weight:600; color:#1e293b;">${w.stress}</span>`;
+                    }
+
+                    // Humor
+                    if (w.humor < 3) {
+                        humorHtml = `<span class="status-badge badge-red" style="font-weight:700;">${w.humor}</span>`;
+                    } else if (w.humor < (avgHumorVal - 0.7)) {
+                        humorHtml = `<span class="status-badge badge-yellow" style="font-weight:700;">${w.humor}</span>`;
+                    } else {
+                        humorHtml = `<span style="font-weight:600; color:#1e293b;">${w.humor}</span>`;
+                    }
+
+                    // Pain
+                    if (w.painScore > 0) {
+                        const scoreColor = w.painScore >= 3 ? 'var(--trofense-red)' : 'var(--text-warning)';
+                        painHtml = `<strong style="color:${scoreColor};">${w.painScore}/5</strong> no(a) <span style="font-weight:600;">${w.painZone || 'Região'}</span>`;
+                    }
+
+                    // PSE & sRPE & Duration
+                    if (w.pse > 0) {
+                        pseHtml = `<span style="font-weight:700; color:#1e293b;">${w.pse}</span>`;
+                        const dur = g ? (g.duration || 70) : (w.duration || 70);
+                        durationHtml = `${dur} min`;
+                        const srpe = w.srpe || (w.pse * dur);
+                        srpeHtml = `<strong>${srpe} A.U.</strong>`;
+                    }
+
+                    // Alerts
+                    let alerts = [];
+                    if (w.sono < 3) alerts.push('Sono');
+                    if (w.fadiga < 3) alerts.push('Fadiga');
+                    if (w.stress < 3) alerts.push('Stress');
+                    if (w.humor < 3) alerts.push('Humor');
+                    if (w.painScore >= 3) alerts.push('Dor Clínico');
+
+                    if (alerts.length > 0) {
+                        statusHtml = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: ${alerts.join(', ')}</span>`;
+                    } else if (w.sono < (avgSonoVal - 0.7) || w.fadiga < (avgFadigaVal - 0.7) || w.stress < (avgStressVal - 0.7) || w.humor < (avgHumorVal - 0.7) || w.painScore === 2) {
+                        statusHtml = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Desvio Clínico</span>`;
+                    }
+                } else {
+                    statusHtml = `<span style="color:#94a3b8;">Sem dados hoje</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td><strong>${p.name}</strong></td>
+                    <td style="text-align: center;">${sonoHtml}</td>
+                    <td style="text-align: center;">${fadigaHtml}</td>
+                    <td style="text-align: center;">${stressHtml}</td>
+                    <td style="text-align: center;">${humorHtml}</td>
+                    <td style="text-align: left;">${painHtml}</td>
+                    <td style="text-align: center;">${pseHtml}</td>
+                    <td style="text-align: center;">${durationHtml}</td>
+                    <td style="text-align: center;">${srpeHtml}</td>
+                    <td style="text-align: left;">${statusHtml}</td>
+                `;
+                body.appendChild(tr);
+            });
+
+            if (countEntries === 0) {
+                body.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-secondary);">Sem dados de Wellness / PSE para o plantel na data selecionada.</td></tr>`;
+            }
         }
 
         function updateIndividualTargetsUI() {
@@ -5063,10 +5244,11 @@
             const duration = myGpsToday ? myGpsToday.duration : 70;
             const microcycle = myGpsToday ? myGpsToday.microcycle : 'MD-3';
 
+            const omitMicrocycle = document.getElementById('report-omit-microcycle-chk')?.checked || false;
             const infoElem = document.getElementById('report-header-session-info');
             if (infoElem) {
                 infoElem.innerHTML = `
-                    Dia Microciclo: <strong>${microcycle}</strong><br>
+                    ${omitMicrocycle ? '' : `Dia Microciclo: <strong>${microcycle}</strong><br>`}
                     Duração Sessão: <strong>${duration} min</strong><br>
                     Plantel Ativo: <strong>${activeCount} jogadores</strong>
                 `;
@@ -5305,6 +5487,127 @@
                             }
                         }
                     });
+                }
+
+                // Preenchimento da Tabela de Wellness e PSE no Relatório
+                const wTableBody = document.getElementById('report-wellness-table-body');
+                if (wTableBody) {
+                    const allPlayerW = appState.wellnessData.filter(w => w.name === p.name);
+                    const todayW = allPlayerW.find(w => w.date === appState.currentDate);
+
+                    const avgSonoVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.sono || 0), 0) / allPlayerW.length) : 0;
+                    const avgFadigaVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.fadiga || 0), 0) / allPlayerW.length) : 0;
+                    const avgStressVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.stress || 0), 0) / allPlayerW.length) : 0;
+                    const avgHumorVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.humor || 0), 0) / allPlayerW.length) : 0;
+                    const avgPseVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.pse || 0), 0) / allPlayerW.length) : 0;
+                    const avgSrpeVal = allPlayerW.length > 0 ? (allPlayerW.reduce((sum, w) => sum + (w.srpe || 0), 0) / allPlayerW.length) : 0;
+
+                    let rowsHtml = '';
+
+                    const buildWRow = (metricName, todayVal, avgVal, analysisHtml) => {
+                        return `
+                            <tr>
+                                <td style="padding: 6px 8px; font-weight: 700; color: #1e293b;">${metricName}</td>
+                                <td style="padding: 6px 8px; text-align: center; font-weight: 700;">${todayVal}</td>
+                                <td style="padding: 6px 8px; text-align: center; color: #64748b;">${avgVal}</td>
+                                <td style="padding: 6px 8px;">${analysisHtml}</td>
+                            </tr>
+                        `;
+                    };
+
+                    // 1. Sono
+                    if (todayW) {
+                        let sonoStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Normal / Adequado</span>';
+                        if (todayW.sono < 3) {
+                            sonoStatus = '<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: Sono Deficiente (< 3)</span>';
+                        } else if (todayW.sono < (avgSonoVal - 0.7)) {
+                            sonoStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Abaixo da Média do Atleta</span>';
+                        }
+                        rowsHtml += buildWRow('Qualidade do Sono', `${todayW.sono} / 5`, `${avgSonoVal.toFixed(1)} / 5`, sonoStatus);
+                    } else {
+                        rowsHtml += buildWRow('Qualidade do Sono', '-', `${avgSonoVal.toFixed(1)} / 5`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 2. Fadiga
+                    if (todayW) {
+                        let fadigaStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Normal / Recuperado</span>';
+                        if (todayW.fadiga < 3) {
+                            fadigaStatus = '<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: Fadiga Elevada (< 3)</span>';
+                        } else if (todayW.fadiga < (avgFadigaVal - 0.7)) {
+                            fadigaStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Acima da Fadiga Habitual</span>';
+                        }
+                        rowsHtml += buildWRow('Nível de Fadiga', `${todayW.fadiga} / 5`, `${avgFadigaVal.toFixed(1)} / 5`, fadigaStatus);
+                    } else {
+                        rowsHtml += buildWRow('Nível de Fadiga', '-', `${avgFadigaVal.toFixed(1)} / 5`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 3. Stress
+                    if (todayW) {
+                        let stressStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Normal / Sem Stress</span>';
+                        if (todayW.stress < 3) {
+                            stressStatus = '<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: Stress Elevado (< 3)</span>';
+                        } else if (todayW.stress < (avgStressVal - 0.7)) {
+                            stressStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Acima do Stress Habitual</span>';
+                        }
+                        rowsHtml += buildWRow('Nível de Stress', `${todayW.stress} / 5`, `${avgStressVal.toFixed(1)} / 5`, stressStatus);
+                    } else {
+                        rowsHtml += buildWRow('Nível de Stress', '-', `${avgStressVal.toFixed(1)} / 5`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 4. Humor
+                    if (todayW) {
+                        let humorStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Normal / Bom Estado</span>';
+                        if (todayW.humor < 3) {
+                            humorStatus = '<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: Humor Baixo (< 3)</span>';
+                        } else if (todayW.humor < (avgHumorVal - 0.7)) {
+                            humorStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Abaixo do Humor Habitual</span>';
+                        }
+                        rowsHtml += buildWRow('Estado de Humor', `${todayW.humor} / 5`, `${avgHumorVal.toFixed(1)} / 5`, humorStatus);
+                    } else {
+                        rowsHtml += buildWRow('Estado de Humor', '-', `${avgHumorVal.toFixed(1)} / 5`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 5. Dor Reportada
+                    if (todayW) {
+                        let painStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Sem queixas de dor</span>';
+                        if (todayW.painScore >= 3) {
+                            painStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Risco Clínico: Dor Moderada/Forte no(a) ${todayW.painZone || 'Região'}</span>`;
+                        } else if (todayW.painScore === 2) {
+                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Dor Ligeira no(a) ${todayW.painZone || 'Região'}</span>`;
+                        }
+                        const painDisplay = todayW.painZone ? `${todayW.painScore} / 5 (${todayW.painZone})` : `${todayW.painScore} / 5 (Nenhuma)`;
+                        rowsHtml += buildWRow('Dor Clínico / Região', painDisplay, 'Histórico Local', painStatus);
+                    } else {
+                        rowsHtml += buildWRow('Dor Clínico / Região', '-', 'Histórico Local', '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 6. PSE
+                    if (todayW && todayW.pse > 0) {
+                        let pseStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Esforço Normal / Adequado</span>';
+                        if (todayW.pse > 7) {
+                            pseStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Esforço Elevado (${todayW.pse}/10)</span>`;
+                        } else if (todayW.pse > (avgPseVal + 1.5)) {
+                            pseStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Esforço Acima da Média</span>';
+                        }
+                        rowsHtml += buildWRow('Esforço Subjetivo (PSE)', `${todayW.pse} / 10`, `${avgPseVal.toFixed(1)} / 10`, pseStatus);
+                    } else {
+                        rowsHtml += buildWRow('Esforço Subjetivo (PSE)', '-', `${avgPseVal.toFixed(1)} / 10`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    // 7. Carga Interna (sRPE)
+                    if (todayW && todayW.srpe > 0) {
+                        let srpeStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Carga Interna sob Controlo</span>';
+                        if (todayW.srpe > 600) {
+                            srpeStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Carga Elevada (${todayW.srpe} A.U.)</span>`;
+                        } else if (todayW.srpe > (avgSrpeVal * 1.3)) {
+                            srpeStatus = '<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Carga Acima da Média (+30%)</span>';
+                        }
+                        rowsHtml += buildWRow('Carga Interna (sRPE)', `${todayW.srpe} A.U.`, `${avgSrpeVal.toFixed(0)} A.U.`, srpeStatus);
+                    } else {
+                        rowsHtml += buildWRow('Carga Interna (sRPE)', '-', `${avgSrpeVal.toFixed(0)} A.U.`, '<span style="color: #94a3b8;">Sem registo hoje</span>');
+                    }
+
+                    wTableBody.innerHTML = rowsHtml;
                 }
 
             } else {
