@@ -757,6 +757,16 @@
             .card {
                 page-break-inside: avoid !important;
             }
+            #report-staff-comments {
+                border: none !important;
+                background-color: transparent !important;
+                padding: 0 !important;
+            }
+            .no-print-border {
+                border: none !important;
+                background-color: transparent !important;
+                padding: 0 !important;
+            }
         }
 
         /* PRINT HIDE CLASSES */
@@ -1521,6 +1531,43 @@
                                 <!-- Filled by JS with all requested metrics -->
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- CAIXA DE NOTAS DO TREINADOR / CLÍNICO -->
+                <div class="card col-12" id="card-session-notes" style="margin-top: 20px;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 class="card-title" style="margin:0;"><i data-lucide="pencil-line"></i> Notas da Sessão (Treinador / Clínico)</h3>
+                        <button class="btn-toggle-print no-print" onclick="toggleCardPrint(this)" title="Ocultar do Relatório PDF"><i data-lucide="eye"></i></button>
+                    </div>
+                    <div style="padding: 12px 16px 16px;">
+                        <textarea
+                            id="session-notes-textarea"
+                            placeholder="Escreve aqui as tuas observações sobre a sessão: estado geral do grupo, situações clínicas relevantes, ajustes de carga, alertas para o dia seguinte..."
+                            oninput="saveSessionNotes()"
+                            style="
+                                width: 100%;
+                                min-height: 110px;
+                                border: 1.5px solid #cbd5e1;
+                                border-radius: 8px;
+                                padding: 12px 14px;
+                                font-size: 13px;
+                                font-family: inherit;
+                                color: #1e293b;
+                                background: #f8fafc;
+                                resize: vertical;
+                                outline: none;
+                                transition: border-color 0.2s, box-shadow 0.2s;
+                                box-sizing: border-box;
+                                line-height: 1.6;
+                            "
+                            onfocus="this.style.borderColor='var(--trofense-blue)'; this.style.boxShadow='0 0 0 3px rgba(15,76,129,0.12)';"
+                            onblur="this.style.borderColor='#cbd5e1'; this.style.boxShadow='none';"
+                        ></textarea>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+                            <span id="session-notes-status" style="font-size:11px; color:#94a3b8; font-style:italic;">As notas são guardadas automaticamente.</span>
+                            <button onclick="clearSessionNotes()" class="no-print" style="font-size:11px; background:none; border:1px solid #e2e8f0; border-radius:4px; padding:3px 10px; cursor:pointer; color:#94a3b8; transition:all 0.15s;" onmouseover="this.style.color='var(--trofense-red)'; this.style.borderColor='var(--trofense-red)'" onmouseout="this.style.color='#94a3b8'; this.style.borderColor='#e2e8f0'">Limpar</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2454,7 +2501,15 @@
                     </div>
                 </div>
 
-                <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 16px; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
+                <!-- COMENTÁRIOS / OBSERVAÇÕES DO STAFF (EDITÁVEL E PERSISTIDO) -->
+                <div style="margin-top: 20px; border: 1.5px dashed #cbd5e1; border-radius: 6px; padding: 12px; background-color: #f8fafc; page-break-inside: avoid;" class="no-print-border">
+                    <span style="font-size: 9.5px; font-weight: 700; color: var(--trofense-blue); text-transform: uppercase; display: block; margin-bottom: 6px;">
+                        <i data-lucide="message-square" style="width:11px; height:11px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Observações e Notas do Staff (Editável)
+                    </span>
+                    <div id="report-staff-comments" contenteditable="true" style="min-height: 50px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px; font-size: 11.5px; line-height: 1.5; color: #1e293b; background-color: #ffffff; outline: none;" placeholder="Escreva aqui observações técnicas, recomendações clínicas ou comentários sobre a sessão do atleta...">Escreva aqui as suas notas e comentários para este atleta...</div>
+                </div>
+
+                <div style="margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 16px; display: flex; justify-content: space-between; font-size: 9px; color: #64748b;">
                     <span>CD Trofense - Central de Fisiologia V2</span>
                     <span>Assinatura do Fisiologista: <strong>Olavo Maciel</strong></span>
                 </div>
@@ -2677,7 +2732,7 @@
                         if (!playerMap[name]) {
                             playerMap[name] = {
                                 name: name,
-                                position: 'Médio Defensivo',
+                                position: '', // Always start blank
                                 status: 'Ativo',
                                 vmax: 32.0,
                                 age: 24,
@@ -2687,7 +2742,6 @@
                             };
                         }
                         if (row.tagGroup) {
-                            playerMap[name].position = mapGroupToPosition(row.tagGroup);
                             const tagVal = '#' + row.tagGroup.trim();
                             if (!playerMap[name].tags.includes(tagVal)) {
                                 playerMap[name].tags.push(tagVal);
@@ -2705,7 +2759,7 @@
                         if (!playerMap[name]) {
                             playerMap[name] = {
                                 name: name,
-                                position: 'Médio Defensivo',
+                                position: '', // Always start blank
                                 status: 'Ativo',
                                 vmax: 32.0,
                                 age: 24,
@@ -2713,6 +2767,38 @@
                                 weight: 75,
                                 tags: []
                             };
+                        }
+                    }
+                });
+            }
+
+            // Sobrescrever/atualizar informações a partir do appState.referencesData se for a lista de jogadores do Sheets
+            if (appState.referencesData && appState.referencesData.length > 0) {
+                appState.referencesData.forEach(ref => {
+                    const nameKey = Object.keys(ref).find(k => /atleta|jogador|nome|name/i.test(k));
+                    const nameVal = nameKey ? ref[nameKey] : '';
+                    if (nameVal && String(nameVal).trim() !== '') {
+                        const name = String(nameVal).trim();
+                        if (playerMap[name]) {
+                            const posKey = Object.keys(ref).find(k => /posição|posicao|position|role/i.test(k));
+                            let positionVal = '';
+                            if (posKey && ref[posKey]) {
+                                positionVal = String(ref[posKey]).trim();
+                            }
+                            
+                            const gkKey = Object.keys(ref).find(k => /is_goalkeeper|goalkeeper|guarda_redes|gr/i.test(k));
+                            if (gkKey) {
+                                const gkVal = String(ref[gkKey]).toUpperCase();
+                                if (gkVal.includes('VERDADEIRO') || gkVal.includes('TRUE') || gkVal === '1') {
+                                    positionVal = 'Guarda-redes';
+                                }
+                            }
+                            playerMap[name].position = positionVal;
+
+                            const statusKey = Object.keys(ref).find(k => /status|estado|ativo/i.test(k));
+                            if (statusKey && ref[statusKey]) {
+                                playerMap[name].status = String(ref[statusKey]).trim();
+                            }
                         }
                     }
                 });
@@ -2841,6 +2927,15 @@
             // Sincronizar silenciosamente a partir da nuvem (Google Sheets) na inicialização
             autoSyncOnLoad();
             loadJogoPrintHeader();
+
+            // Guardar comentários do staff localmente ao digitar
+            const commentEl = document.getElementById('report-staff-comments');
+            if (commentEl) {
+                commentEl.addEventListener('input', () => {
+                    const key = `comment_${appState.selectedPlayer}_${appState.currentDate}`;
+                    localStorage.setItem(key, commentEl.innerText);
+                });
+            }
         });
 
         window.addEventListener('load', () => {
@@ -3073,13 +3168,23 @@
                     
                     let painScore = 1;
                     let painZone = '';
+                    let allPains = [];
                     if (p.name === 'Ricardo Martins' && d > 24) {
                         painScore = 4;
                         painZone = 'Coxa_D';
+                        allPains = [{ zone: 'Coxa_D', muscle: 'Isquios Dir.', score: 4 }];
                     } else if (Math.random() > 0.85) {
                         painScore = Math.floor(Math.random() * 3) + 2;
                         const zones = ['Coxa_E', 'Joelho_D', 'Tornozelo_E', 'Gemeo_D'];
                         painZone = zones[Math.floor(Math.random() * zones.length)];
+                        const muscleLabels = {
+                            'Coxa_E': 'Isquios Esq.',
+                            'Coxa_D': 'Isquios Dir.',
+                            'Joelho_D': 'Joelho Dir.',
+                            'Tornozelo_E': 'Tornozelo Esq.',
+                            'Gemeo_D': 'Gémeo Dir.'
+                        };
+                        allPains = [{ zone: painZone, muscle: muscleLabels[painZone] || painZone, score: painScore }];
                     }
 
                     appState.wellnessData.push({
@@ -3090,7 +3195,8 @@
                         fadiga,
                         humor,
                         painScore,
-                        painZone
+                        painZone,
+                        allPains
                     });
 
                     // GPS Cargas
@@ -3369,6 +3475,34 @@
             }
         }
 
+        // TRADUÇÃO DE REGIÕES DE DOR PARA PORTUGUÊS LEGÍVEL
+        function translatePainZone(zone) {
+            if (!zone || zone === 'Região') return 'Sem queixas';
+            const mapping = {
+                'Coxa_E': 'Coxa Esq.',
+                'Coxa_D': 'Coxa Dir.',
+                'Gemeo_E': 'Gémeo Esq.',
+                'Gemeo_D': 'Gémeo Dir.',
+                'Pubis': 'Púbis',
+                'Lombar': 'Lombar',
+                'Joelho_D': 'Joelho Dir.',
+                'Joelho_E': 'Joelho Esq.',
+                'Tornozelo_D': 'Tornozelo Dir.',
+                'Tornozelo_E': 'Tornozelo Esq.',
+                'Cabeca': 'Cabeça',
+                'Pescoco': 'Pescoço',
+                'Peito': 'Peito',
+                'Ombro_E': 'Ombro Esq.',
+                'Braco_E': 'Braço Esq.',
+                'Ombro_D': 'Ombro Dir.',
+                'Braco_D': 'Braço Dir.',
+                'Anca': 'Anca',
+                'Pe_E': 'Pé Esq.',
+                'Pe_D': 'Pé Dir.'
+            };
+            return mapping[zone] || zone;
+        }
+
         // MAPEAMENTO DE CABEÇALHOS DO FORMULÁRIO GOOGLE DE WELLNESS
         function mapWellnessRow(row) {
             const mapped = {};
@@ -3378,42 +3512,68 @@
 
             mapped.name = row["1 - Atleta / Athlete"] || row["name"] || "";
             
-            const extractNum = (val) => {
-                if (val === undefined || val === null || val === '') return 3;
+            const extractNum = (val, defaultVal = 3) => {
+                if (val === undefined || val === null || val === '') return defaultVal;
                 if (typeof val === 'number') return val;
                 const match = String(val).match(/\d+/);
-                return match ? parseInt(match[0], 10) : 3;
+                return match ? parseInt(match[0], 10) : defaultVal;
             };
 
-            mapped.sono = extractNum(row["2 - Qualidade do Sono / Sleep Quality"] || row["sono"]);
-            mapped.fadiga = extractNum(row["3 - Nível de Fadiga / Fatigue Level"] || row["fadiga"]);
-            mapped.stress = extractNum(row["4 - Nível de Stress / Stress Level"] || row["stress"]);
-            mapped.humor = extractNum(row["5 - Estado de Humor / Mood State"] || row["humor"]);
+            mapped.sono = extractNum(row["2 - Qualidade do Sono / Sleep Quality"] || row["sono"], 3);
+            mapped.fadiga = extractNum(row["3 - Nível de Fadiga / Fatigue Level"] || row["fadiga"], 3);
+            mapped.stress = extractNum(row["4 - Nível de Stress / Stress Level"] || row["stress"], 3);
+            mapped.humor = extractNum(row["5 - Estado de Humor / Mood State"] || row["humor"], 3);
             
-            mapped.pse = extractNum(row["PSE"] || row["pse"]) || 0;
-            mapped.duration = extractNum(row["Duracao_Minutos"] || row["duration"]) || 0;
+            mapped.pse = extractNum(row["PSE"] || row["pse"], 0);
+            mapped.duration = extractNum(row["Duracao_Minutos"] || row["duration"], 0);
             mapped.srpe = mapped.pse * mapped.duration;
-
             let maxPain = 1;
             let painZone = '';
-            
+
             const painKeys = [
-                { key: 'Isquiotibiais Esquerdos / Left Hamstrings', name: 'Coxa_E' },
-                { key: 'Isquiotibiais Direitos / Right Hamstrings', name: 'Coxa_D' },
-                { key: 'Adutores Esquerdos / Left Adductors', name: 'Coxa_E' },
-                { key: 'Adutores Direitos / Right Adductors', name: 'Coxa_D' },
-                { key: 'Quadricípites Esquerdos / Left Quadriceps', name: 'Coxa_E' },
-                { key: 'Quadricípites Direitos / Right Quadriceps', name: 'Coxa_D' },
-                { key: 'Gémeos Esquerdos / Left Calves', name: 'Gemeo_E' },
-                { key: 'Gémeos Direitos / Right Calves', name: 'Gemeo_D' },
-                { key: 'Púbis / Groin', name: 'Pubis' },
-                { key: 'Lombar / Lower Back', name: 'Lombar' }
+                // Nomes completos em português
+                { key: 'Isquiotibiais Esquerdos', altKey: 'Left Hamstrings', name: 'Coxa_E', label: 'Isquios Esq.' },
+                { key: 'Isquiotibiais Direitos', altKey: 'Right Hamstrings', name: 'Coxa_D', label: 'Isquios Dir.' },
+                { key: 'Adutores Esquerdos', altKey: 'Left Adductors', name: 'Coxa_E', label: 'Adutores Esq.' },
+                { key: 'Adutores Direitos', altKey: 'Right Adductors', name: 'Coxa_D', label: 'Adutores Dir.' },
+                { key: 'Quadricípites Esquerdos', altKey: 'Left Quadriceps', name: 'Coxa_E', label: 'Quads Esq.' },
+                { key: 'Quadricípites Direitos', altKey: 'Right Quadriceps', name: 'Coxa_D', label: 'Quads Dir.' },
+                { key: 'Gémeos Esquerdos', altKey: 'Left Calves', name: 'Gemeo_E', label: 'Gémeos Esq.' },
+                { key: 'Gémeos Direitos', altKey: 'Right Calves', name: 'Gemeo_D', label: 'Gémeos Dir.' },
+                { key: 'Púbis', altKey: 'Groin', name: 'Pubis', label: 'Púbis' },
+                { key: 'Lombar', altKey: 'Lower Back', name: 'Lombar', label: 'Lombar' },
+                // Nomes curtos / códigos directos do sheet
+                { key: 'Coxa_E', altKey: 'coxa_e', name: 'Coxa_E', label: 'Coxa Esq.' },
+                { key: 'Coxa_D', altKey: 'coxa_d', name: 'Coxa_D', label: 'Coxa Dir.' },
+                { key: 'Gemeo_E', altKey: 'gemeo_e', name: 'Gemeo_E', label: 'Gémeo Esq.' },
+                { key: 'Gemeo_D', altKey: 'gemeo_d', name: 'Gemeo_D', label: 'Gémeo Dir.' },
+                { key: 'Joelho_E', altKey: 'joelho_e', name: 'Joelho_E', label: 'Joelho Esq.' },
+                { key: 'Joelho_D', altKey: 'joelho_d', name: 'Joelho_D', label: 'Joelho Dir.' },
+                { key: 'Tornozelo_E', altKey: 'tornozelo_e', name: 'Tornozelo_E', label: 'Tornozelo Esq.' },
+                { key: 'Tornozelo_D', altKey: 'tornozelo_d', name: 'Tornozelo_D', label: 'Tornozelo Dir.' },
+                { key: 'Pe_E', altKey: 'pe_e', name: 'Pe_E', label: 'Pé Esq.' },
+                { key: 'Pe_D', altKey: 'pe_d', name: 'Pe_D', label: 'Pé Dir.' },
+                { key: 'Anca', altKey: 'anca', name: 'Anca', label: 'Anca' },
+                { key: 'Pubis', altKey: 'pubis', name: 'Pubis', label: 'Púbis' },
+                { key: 'Ombro_E', altKey: 'ombro_e', name: 'Ombro_E', label: 'Ombro Esq.' },
+                { key: 'Ombro_D', altKey: 'ombro_d', name: 'Ombro_D', label: 'Ombro Dir.' },
+                // Termos genéricos / variantes
+                { key: 'Dor', altKey: 'pain', name: 'Geral', label: 'Dor Geral' }
             ];
 
+            const allPains = [];
+            const seenZones = new Set();
             painKeys.forEach(pk => {
                 for (let k in row) {
-                    if (k.includes(pk.key)) {
-                        const val = extractNum(row[k]);
+                    const headerLower = k.toLowerCase().replace(/[_\s-]/g, '');
+                    const keyLower = pk.key.toLowerCase().replace(/[_\s-]/g, '');
+                    const altLower = pk.altKey.toLowerCase().replace(/[_\s-]/g, '');
+                    if (headerLower.includes(keyLower) || headerLower.includes(altLower)) {
+                        const val = extractNum(row[k], 1);
+                        if (val >= 2 && !seenZones.has(pk.name + '_' + pk.label)) {
+                            allPains.push({ zone: pk.name, muscle: pk.label, score: val });
+                            seenZones.add(pk.name + '_' + pk.label);
+                        }
                         if (val > maxPain) {
                             maxPain = val;
                             painZone = pk.name;
@@ -3424,6 +3584,7 @@
 
             mapped.painScore = maxPain;
             mapped.painZone = painZone;
+            mapped.allPains = allPains;
 
             return mapped;
         }
@@ -4095,10 +4256,10 @@
 
         function getFilteredRoster(includeGK = false) {
             return appState.players.filter(p => {
+                if (appState.selectedPosition !== 'ALL' && p.position !== appState.selectedPosition) return false;
                 if (appState.selectedPosition !== 'Guarda-redes') {
                     if (!includeGK && p.position === 'Guarda-redes') return false;
                 }
-                if (appState.selectedPosition !== 'ALL' && p.position !== appState.selectedPosition) return false;
                 if (appState.selectedStatus !== 'ALL' && p.status !== appState.selectedStatus) return false;
                 if (appState.selectedTags.length > 0) {
                     const match = appState.selectedTags.every(t => p.tags.includes(t));
@@ -4120,9 +4281,18 @@
                     const sumHumor = pWellness.reduce((sum, d) => sum + d.humor, 0);
                     const maxPain = pWellness.reduce((max, d) => Math.max(max, d.painScore), 0);
                     
-                    const painZones = pWellness.filter(d => d.painScore >= 3 && d.painZone).map(d => d.painZone);
-                    const uniqueZones = [...new Set(painZones)];
-                    const painZoneText = uniqueZones.length > 0 ? uniqueZones.join(', ').replace(/_/g, ' ') : 'Sem Dor';
+                    const allDetailedPains = [];
+                    pWellness.forEach(d => {
+                        if (d.allPains && d.allPains.length > 0) {
+                            d.allPains.forEach(ap => {
+                                allDetailedPains.push(`${ap.muscle}: ${ap.score}/5`);
+                            });
+                        } else if (d.painScore > 1 && d.painZone) {
+                            allDetailedPains.push(`${translatePainZone(d.painZone)}: ${d.painScore}/5`);
+                        }
+                    });
+                    const uniqueDetailedPains = [...new Set(allDetailedPains)];
+                    const painZoneText = uniqueDetailedPains.length > 0 ? uniqueDetailedPains.join(', ') : 'Sem queixas';
 
                     const avgSono = parseFloat((sumSono / pWellness.length).toFixed(1));
                     const avgStress = parseFloat((sumStress / pWellness.length).toFixed(1));
@@ -4304,6 +4474,7 @@
             updatePosTreinoKPIs();
             renderPosGeneralMetricsTable();
             renderPosGeneralWellnessTable();
+            loadSessionNotes();
             updateIndividualTargetsUI();
 
             renderJogoView();
@@ -4446,30 +4617,40 @@
                 return;
             }
 
-            const scores = agg.map(a => a.avg);
-            const mean = scores.reduce((a,b) => a+b, 0) / scores.length;
-            const variance = scores.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / scores.length;
-            const stdDev = Math.sqrt(variance);
-
             const list = agg.map(item => {
-                const z = stdDev > 0 ? parseFloat(((item.avg - mean) / stdDev).toFixed(2)) : 0.0;
-                return { ...item, z };
+                const p = item.player;
+                // Get all historical wellness data for this player up to the selected date
+                const pAllW = appState.wellnessData.filter(row => row.name === p.name);
+                let z = 0.0;
+                if (pAllW.length > 1) {
+                    const dailyScores = pAllW.map(row => ((row.sono || 3) + (row.stress || 3) + (row.fadiga || 3) + (row.humor || 3)) / 4);
+                    const historyMean = dailyScores.reduce((sum, v) => sum + v, 0) / dailyScores.length;
+                    const historyVariance = dailyScores.reduce((sum, v) => sum + Math.pow(v - historyMean, 2), 0) / dailyScores.length;
+                    const historyStdDev = Math.sqrt(historyVariance);
+                    z = historyStdDev > 0.02 ? ((item.avg - historyMean) / historyStdDev) : 0.0;
+                }
+                return { ...item, z: parseFloat(z.toFixed(2)) };
             });
 
-            list.sort((a,b) => b.z - a.z); // High wellness first
+            // Sort critical alerts (lowest Z-Scores) first so they are at the top for triage!
+            list.sort((a,b) => a.z - b.z);
 
             list.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><strong>${item.player.name}</strong></td>
                     <td>${item.player.position}</td>
-                    <td><span class="status-badge ${item.z < -1.0 ? 'badge-red' : item.z < 0 ? 'badge-yellow' : 'badge-green'}">${item.z}</span></td>
+                    <td><span class="status-badge ${item.z < -1.0 ? 'badge-red' : item.z < 0 ? 'badge-yellow' : 'badge-green'}">${item.z > 0 ? '+' + item.z : item.z}</span></td>
                     <td>${item.avg.toFixed(1)}</td>
                     <td>${item.sono} / 5</td>
                     <td>${item.stress} / 5</td>
                     <td>${item.fadiga} / 5</td>
                     <td>${item.humor} / 5</td>
-                    <td><span class="status-badge ${item.painScore >= 3 ? 'badge-red' : 'badge-green'}">${item.painZone}</span></td>
+                    <td>
+                        <span class="status-badge ${item.painScore >= 3 ? 'badge-red' : item.painScore === 2 ? 'badge-yellow' : 'badge-green'}" style="text-transform:none;">
+                            ${item.painScore > 1 ? translatePainZone(item.painZone) : 'Sem queixas'}
+                        </span>
+                    </td>
                 `;
                 body.appendChild(tr);
             });
@@ -4509,7 +4690,7 @@
                         regionEl.className.baseVal = `pain-region pain-level-${activePain.painScore}`;
                     }
                     painBox.innerHTML = `
-                        <div style="color: var(--trofense-red); font-weight:700;">Dor Recente: ${activePain.painZone.replace(/_/g, ' ')}</div>
+                        <div style="color: var(--trofense-red); font-weight:700;">Dor Recente: ${translatePainZone(activePain.painZone)}</div>
                         <div style="font-size:11px; margin-top:2px;">Escala: ${activePain.painScore} / 5 (a ${activePain.date.substring(5)})</div>
                     `;
                 } else {
@@ -4697,10 +4878,19 @@
                         humorHtml = `<span style="font-weight:600; color:#1e293b;">${w.humor}</span>`;
                     }
 
-                    // Pain
-                    if (w.painScore > 0) {
-                        const scoreColor = w.painScore >= 3 ? 'var(--trofense-red)' : 'var(--text-warning)';
-                        painHtml = `<strong style="color:${scoreColor};">${w.painScore}/5</strong> no(a) <span style="font-weight:600;">${w.painZone || 'Região'}</span>`;
+                    // Pain — discriminar todas as zonas de dor
+                    // Se allPains vazio mas há painZone, construi lista a partir do fallback
+                    let displayPains = (w.allPains && w.allPains.length > 0)
+                        ? w.allPains
+                        : (w.painScore > 1 && w.painZone)
+                            ? [{ zone: w.painZone, muscle: translatePainZone(w.painZone), score: w.painScore }]
+                            : [];
+
+                    if (displayPains.length > 0) {
+                        painHtml = displayPains.map(pain => {
+                            const badgeColor = pain.score >= 3 ? 'badge-red' : 'badge-yellow';
+                            return `<span class="status-badge ${badgeColor}" style="margin-right:3px; margin-bottom:3px; display:inline-block; font-size:10px; padding:2px 5px; font-weight:600; text-transform:none; white-space:nowrap;">${pain.muscle} (${pain.score}/5)</span>`;
+                        }).join('');
                     }
 
                     // PSE & sRPE & Duration
@@ -4920,7 +5110,7 @@
                     div.innerHTML = `
                         <div>
                             <strong>${c.name}</strong>
-                            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Região: ${c.painZone.replace(/_/g, ' ')}</div>
+                            <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Região: ${translatePainZone(c.painZone)}</div>
                         </div>
                         <span class="status-badge badge-red">Dor: ${c.painScore} / 5</span>
                     `;
@@ -5184,6 +5374,13 @@
             const comparisonMode = document.getElementById('report-comparison-select').value;
             appState.reportMode = mode;
 
+            const commentEl = document.getElementById('report-staff-comments');
+            if (commentEl) {
+                const key = `comment_${appState.selectedPlayer}_${appState.currentDate}`;
+                const savedComment = localStorage.getItem(key) || 'Escreva aqui as suas notas e comentários para este atleta...';
+                commentEl.innerText = savedComment;
+            }
+
             const p = appState.players.find(x => x.name === appState.selectedPlayer);
             if (!p) return;
 
@@ -5351,22 +5548,23 @@
                 }
 
                 // INDIVIDUAL AVERAGES FOR POSITION & SECTOR
-                const myPos = p.position;
+                const myPos = p.position || '';
                 const samePosRows = todayGpsAll.filter(g => {
                     const gp = appState.players.find(x => x.name === g.name);
-                    return gp && gp.position === myPos;
+                    return gp && (gp.position || '') === myPos;
                 });
                 
-                const mySector = (p.position.includes('Defesa') || p.position.includes('Lateral')) ? 'Defesa' :
-                                 (p.position.includes('Médio')) ? 'Médio' :
-                                 (p.position.includes('Extremo') || p.position.includes('Ponta')) ? 'Avançado' : 'Guarda-redes';
+                const mySector = myPos ? (((myPos.includes('Defesa') || myPos.includes('Lateral')) ? 'Defesa' :
+                                 (myPos.includes('Médio')) ? 'Médio' :
+                                 (myPos.includes('Extremo') || myPos.includes('Ponta')) ? 'Avançado' : 'Guarda-redes')) : 'Outro';
                 
                 const sameSectorRows = todayGpsAll.filter(g => {
                     const gp = appState.players.find(x => x.name === g.name);
                     if (!gp) return false;
-                    const gps = (gp.position.includes('Defesa') || gp.position.includes('Lateral')) ? 'Defesa' :
-                                 (gp.position.includes('Médio')) ? 'Médio' :
-                                 (gp.position.includes('Extremo') || gp.position.includes('Ponta')) ? 'Avançado' : 'Guarda-redes';
+                    const gpPos = gp.position || '';
+                    const gps = gpPos ? (((gpPos.includes('Defesa') || gpPos.includes('Lateral')) ? 'Defesa' :
+                                 (gpPos.includes('Médio')) ? 'Médio' :
+                                 (gpPos.includes('Extremo') || gpPos.includes('Ponta')) ? 'Avançado' : 'Guarda-redes')) : 'Outro';
                     return gps === mySector;
                 });
 
@@ -5570,12 +5768,26 @@
                     // 5. Dor Reportada
                     if (todayW) {
                         let painStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Sem queixas de dor</span>';
-                        if (todayW.painScore >= 3) {
-                            painStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Risco Clínico: Dor Moderada/Forte no(a) ${todayW.painZone || 'Região'}</span>`;
+                        if (todayW.allPains && todayW.allPains.length > 0) {
+                            const badges = todayW.allPains.map(pain => {
+                                const badgeColor = pain.score >= 3 ? 'badge-red' : 'badge-yellow';
+                                return `<span class="status-badge ${badgeColor}" style="font-weight: 700; padding: 2px 6px; margin-right: 4px; text-transform:none;">${pain.muscle}: ${pain.score}/5</span>`;
+                            }).join(' ');
+                            painStatus = badges;
+                        } else if (todayW.painScore >= 3) {
+                            painStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px; text-transform:none;">🚨 Risco Clínico: Dor Moderada/Forte em ${translatePainZone(todayW.painZone)}</span>`;
                         } else if (todayW.painScore === 2) {
-                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Dor Ligeira no(a) ${todayW.painZone || 'Região'}</span>`;
+                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px; text-transform:none;">⚠️ Dor Ligeira em ${translatePainZone(todayW.painZone)}</span>`;
                         }
-                        const painDisplay = todayW.painZone ? `${todayW.painScore} / 5 (${todayW.painZone})` : `${todayW.painScore} / 5 (Nenhuma)`;
+                        
+                        let painDisplay = 'Nenhuma';
+                        if (todayW.allPains && todayW.allPains.length > 0) {
+                            painDisplay = todayW.allPains.map(p => `${p.muscle} (${p.score})`).join(', ');
+                        } else if (todayW.painZone) {
+                            painDisplay = `${todayW.painScore}/5 (${translatePainZone(todayW.painZone)})`;
+                        } else if (todayW.painScore > 1) {
+                            painDisplay = `${todayW.painScore}/5`;
+                        }
                         rowsHtml += buildWRow('Dor Clínico / Região', painDisplay, 'Histórico Local', painStatus);
                     } else {
                         rowsHtml += buildWRow('Dor Clínico / Região', '-', 'Histórico Local', '<span style="color: #94a3b8;">Sem registo hoje</span>');
@@ -6041,6 +6253,49 @@
             lucide.createIcons();
         }
 
+        // NOTAS DA SESSÃO — Guardadas no localStorage por data
+        function _sessionNotesKey() {
+            return 'trofense_session_notes_' + (appState.currentDate || 'geral');
+        }
+        function saveSessionNotes() {
+            const ta = document.getElementById('session-notes-textarea');
+            const status = document.getElementById('session-notes-status');
+            if (!ta) return;
+            localStorage.setItem(_sessionNotesKey(), ta.value);
+            if (status) {
+                status.textContent = 'Guardado às ' + new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+                status.style.color = '#22c55e';
+                clearTimeout(status._timer);
+                status._timer = setTimeout(() => {
+                    status.textContent = 'As notas são guardadas automaticamente.';
+                    status.style.color = '#94a3b8';
+                }, 2500);
+            }
+        }
+        function clearSessionNotes() {
+            const ta = document.getElementById('session-notes-textarea');
+            const status = document.getElementById('session-notes-status');
+            if (!ta) return;
+            if (!ta.value.trim() || confirm('Tens a certeza que queres limpar as notas desta sessão?')) {
+                ta.value = '';
+                localStorage.removeItem(_sessionNotesKey());
+                if (status) {
+                    status.textContent = 'Notas apagadas.';
+                    status.style.color = '#ef4444';
+                    clearTimeout(status._timer);
+                    status._timer = setTimeout(() => {
+                        status.textContent = 'As notas são guardadas automaticamente.';
+                        status.style.color = '#94a3b8';
+                    }, 2500);
+                }
+            }
+        }
+        function loadSessionNotes() {
+            const ta = document.getElementById('session-notes-textarea');
+            if (!ta) return;
+            ta.value = localStorage.getItem(_sessionNotesKey()) || '';
+        }
+
         // EXIBIR/OCULTAR ATLETAS EXCLUÍDOS NO RELATÓRIO INDIVIDUAL A4
         function toggleReportExcluded() {
             const chk = document.getElementById('report-show-excluded-chk');
@@ -6128,7 +6383,7 @@
             agg.forEach(g => {
                 const player = appState.players.find(x => x.name === g.name);
                 if (player) {
-                    const playerPos = player.position.normalize('NFC');
+                    const playerPos = (player.position || '').normalize('NFC');
                     if (!posMap[playerPos]) posMap[playerPos] = [];
                     posMap[playerPos].push(Number(g[metricKey]) || 0);
                 }
@@ -6158,7 +6413,7 @@
             agg.forEach(g => {
                 const player = appState.players.find(x => x.name === g.name);
                 if (player) {
-                    const playerPos = player.position.normalize('NFC');
+                    const playerPos = (player.position || '').normalize('NFC');
                     let sector = '';
                     if (playerPos === 'Defesa Central'.normalize('NFC') || playerPos === 'Lateral'.normalize('NFC')) {
                         sector = 'Defesa'.normalize('NFC');
