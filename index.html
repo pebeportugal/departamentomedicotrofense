@@ -3225,43 +3225,22 @@
                     let painScore = 0;
                     let painZone = '';
                     let allPains = [];
-
-                    const muscleLabels = {
-                        'Coxa_E': 'Isquios Esq.',
-                        'Coxa_D': 'Isquios Dir.',
-                        'Joelho_D': 'Joelho Dir.',
-                        'Joelho_E': 'Joelho Esq.',
-                        'Tornozelo_E': 'Tornozelo Esq.',
-                        'Tornozelo_D': 'Tornozelo Dir.',
-                        'Gemeo_D': 'Gémeo Dir.',
-                        'Gemeo_E': 'Gémeo Esq.',
-                        'Lombar': 'Lombar',
-                        'Pubis': 'Púbis'
-                    };
-
                     if (p.name === 'Ricardo Martins' && d > 24) {
-                        // Multi-pain demo: isquios + joelho
-                        allPains = [
-                            { zone: 'Coxa_D', muscle: 'Isquios Dir.', score: 7 },
-                            { zone: 'Joelho_D', muscle: 'Joelho Dir.', score: 5 }
-                        ];
                         painScore = 7;
                         painZone = 'Coxa_D';
-                    } else if (Math.random() > 0.82) {
-                        // Single or dual pain zone
-                        const zones = ['Coxa_E', 'Coxa_D', 'Joelho_D', 'Tornozelo_E', 'Gemeo_D', 'Gemeo_E', 'Lombar'];
-                        const z1 = zones[Math.floor(Math.random() * zones.length)];
-                        const s1 = Math.floor(Math.random() * 7) + 2;
-                        allPains.push({ zone: z1, muscle: muscleLabels[z1] || z1, score: s1 });
-                        // 20% chance of a second pain zone
-                        if (Math.random() > 0.80) {
-                            const remaining = zones.filter(z => z !== z1);
-                            const z2 = remaining[Math.floor(Math.random() * remaining.length)];
-                            const s2 = Math.floor(Math.random() * 5) + 2;
-                            allPains.push({ zone: z2, muscle: muscleLabels[z2] || z2, score: s2 });
-                        }
-                        painScore = Math.max(...allPains.map(a => a.score));
-                        painZone = allPains[0].zone;
+                        allPains = [{ zone: 'Coxa_D', muscle: 'Isquios Dir.', score: 7 }];
+                    } else if (Math.random() > 0.85) {
+                        painScore = Math.floor(Math.random() * 7) + 2;
+                        const zones = ['Coxa_E', 'Joelho_D', 'Tornozelo_E', 'Gemeo_D'];
+                        painZone = zones[Math.floor(Math.random() * zones.length)];
+                        const muscleLabels = {
+                            'Coxa_E': 'Isquios Esq.',
+                            'Coxa_D': 'Isquios Dir.',
+                            'Joelho_D': 'Joelho Dir.',
+                            'Tornozelo_E': 'Tornozelo Esq.',
+                            'Gemeo_D': 'Gémeo Dir.'
+                        };
+                        allPains = [{ zone: painZone, muscle: muscleLabels[painZone] || painZone, score: painScore }];
                     }
 
                     appState.wellnessData.push({
@@ -7000,14 +6979,10 @@
                     const todayTop = myGpsTodayList.reduce((max, r) => Math.max(max, r.topSpeedKmh || 0), 0);
                     todaySpeeds.push(parseFloat(todayTop.toFixed(1)));
 
-                    // Recorde: Vmax de perfil tratada (se não existir, fica null para não desenhar a barra)
-                    if (p.vmax !== null && p.vmax !== undefined && p.vmax > 0) {
-                        const pVmaxRaw = Number(p.vmax);
-                        const pVmaxKmh = pVmaxRaw < 15 ? pVmaxRaw * 3.6 : pVmaxRaw;
-                        bestSpeeds.push(parseFloat(pVmaxKmh.toFixed(1)));
-                    } else {
-                        bestSpeeds.push(null);
-                    }
+                    // Recorde: Vmax de perfil tratada
+                    const pVmaxRaw = Number(p.vmax) || 32.0;
+                    const pVmaxKmh = pVmaxRaw < 15 ? pVmaxRaw * 3.6 : pVmaxRaw;
+                    bestSpeeds.push(parseFloat(pVmaxKmh.toFixed(1)));
                 }
             });
 
@@ -8303,89 +8278,55 @@
         }
 
         function changeUserRole(role) {
-            localStorage.setItem('trofense_user_role', role);
-            applyRoleAccessControl(role);
+            // Bloqueado na versão do Departamento Médico
         }
 
-        function applyRoleAccessControl(forcedRole) {
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlRole = urlParams.get('role') || urlParams.get('mode') || urlParams.get('perfil');
-            
-            let role = 'completo';
-            if (forcedRole) {
-                role = forcedRole;
-            } else if (urlRole) {
-                role = urlRole;
-                localStorage.setItem('trofense_user_role', role);
-            } else {
-                role = localStorage.getItem('trofense_user_role') || 'completo';
-            }
-
-            // Normalize role name
-            if (role === 'medical' || role === 'dm' || role === 'medico') {
-                role = 'medico';
-            } else {
-                role = 'completo';
-            }
+        function applyRoleAccessControl() {
+            // HARDCODED LOCK FOR MEDICAL DEPT
+            const role = 'medico';
 
             // Update dropdown value if it exists
             const selectEl = document.getElementById('user-role-select');
             if (selectEl) {
-                selectEl.value = role;
+                selectEl.style.display = 'none'; // Esconder o dropdown na versão médica
+                if (selectEl.parentElement) {
+                    selectEl.parentElement.style.display = 'none'; // Esconder toda a div do filtro de acesso
+                }
             }
 
             const items = document.querySelectorAll('.tab-controller-links .nav-item');
             
-            if (role === 'medico') {
-                // Hide other tabs
-                items.forEach(item => {
-                    const tab = item.getAttribute('data-tab');
-                    if (tab !== 'dm') {
-                        item.style.display = 'none';
-                    } else {
-                        item.style.display = 'block';
-                    }
-                });
-
-                // Auto-switch to medical tab if current active tab is hidden
-                const activeTabEl = document.querySelector('.tab-controller-links .nav-item.active');
-                const activeTab = activeTabEl ? activeTabEl.getAttribute('data-tab') : '';
-                if (activeTab !== 'dm') {
-                    const dmTabButton = document.querySelector('.tab-controller-links .nav-item[data-tab="dm"]');
-                    if (dmTabButton) {
-                        dmTabButton.click();
-                    }
-                }
-                
-                // Customize user profile display in footer
-                const userAvatar = document.querySelector('.sidebar-footer .avatar');
-                if (userAvatar) userAvatar.textContent = 'DM';
-                const userName = document.querySelector('.sidebar-footer .user-details h4');
-                if (userName) userName.textContent = 'Staff Médico';
-                const userRole = document.querySelector('.sidebar-footer .user-details p');
-                if (userRole) userRole.textContent = 'Departamento Médico';
-
-                // Hide database sync button for medical staff
-                const syncBtn = document.getElementById('btn-sync-database');
-                if (syncBtn) syncBtn.style.display = 'none';
-            } else {
-                // Show all tabs
-                items.forEach(item => {
+            // Hide other tabs
+            items.forEach(item => {
+                const tab = item.getAttribute('data-tab');
+                if (tab !== 'dm') {
+                    item.style.display = 'none';
+                } else {
                     item.style.display = 'block';
-                });
-                
-                // Restore default user profile
-                const userAvatar = document.querySelector('.sidebar-footer .avatar');
-                if (userAvatar) userAvatar.textContent = 'OM';
-                const userName = document.querySelector('.sidebar-footer .user-details h4');
-                if (userName) userName.textContent = 'Olavo Maciel';
-                const userRole = document.querySelector('.sidebar-footer .user-details p');
-                if (userRole) userRole.textContent = 'Fisiologista Chefe';
+                }
+            });
 
-                // Show database sync button for admin/physiologist
-                const syncBtn = document.getElementById('btn-sync-database');
-                if (syncBtn) syncBtn.style.display = 'inline-flex';
+            // Auto-switch to medical tab if current active tab is hidden
+            const activeTabEl = document.querySelector('.tab-controller-links .nav-item.active');
+            const activeTab = activeTabEl ? activeTabEl.getAttribute('data-tab') : '';
+            if (activeTab !== 'dm') {
+                const dmTabButton = document.querySelector('.tab-controller-links .nav-item[data-tab="dm"]');
+                if (dmTabButton) {
+                    dmTabButton.click();
+                }
             }
+            
+            // Customize user profile display in footer
+            const userAvatar = document.querySelector('.sidebar-footer .avatar');
+            if (userAvatar) userAvatar.textContent = 'DM';
+            const userName = document.querySelector('.sidebar-footer .user-details h4');
+            if (userName) userName.textContent = 'Staff Médico';
+            const userRole = document.querySelector('.sidebar-footer .user-details p');
+            if (userRole) userRole.textContent = 'Departamento Médico';
+
+            // Hide database sync button for medical staff
+            const syncBtn = document.getElementById('btn-sync-database');
+            if (syncBtn) syncBtn.style.display = 'none';
         }
 
         // UTILS
