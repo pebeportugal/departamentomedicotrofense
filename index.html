@@ -653,6 +653,20 @@
             cursor: pointer;
         }
 
+        /* Níveis de dor na escala de 0 a 10 */
+        .pain-region.pain-level-1, .pain-region.pain-level-2, .pain-region.pain-level-3 {
+            fill: #fef08a !important;
+            stroke: #eab308;
+        }
+        .pain-region.pain-level-4, .pain-region.pain-level-5, .pain-region.pain-level-6 {
+            fill: #fdba74 !important;
+            stroke: #f97316;
+        }
+        .pain-region.pain-level-7, .pain-region.pain-level-8, .pain-region.pain-level-9, .pain-region.pain-level-10 {
+            fill: #fca5a5 !important;
+            stroke: #ef4444;
+        }
+
         /* TARGETS PROGRESS */
         .target-bar-group {
             margin-bottom: 12px;
@@ -989,7 +1003,7 @@
                             <span class="kpi-value" id="pre-kpi-pain">0</span>
                             <span class="kpi-unit">Atletas</span>
                         </div>
-                        <div class="kpi-subtext">Reportaram dores nível >= 3</div>
+                        <div class="kpi-subtext">Reportaram dores nível >= 4</div>
                     </div>
                     <div class="kpi-card">
                         <span class="kpi-label">Z-Score Wellness Médio</span>
@@ -2158,7 +2172,7 @@
                             <h3 class="card-title"><i data-lucide="megaphone"></i> Lista de Chamada Médica Obrigatória</h3>
                             <span class="status-badge badge-red" id="dm-alerts-count">0 Ocorrências</span>
                         </div>
-                        <p style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">Jogadores com dor escala >= 3 na triagem diária.</p>
+                        <p style="font-size:12.5px; color:var(--text-secondary); margin-bottom:12px;">Jogadores com dor escala >= 4 na triagem diária.</p>
                         <div id="dm-call-list-container" style="display:flex; flex-direction:column; gap:8px;">
                             <!-- Filled by JS -->
                         </div>
@@ -2734,10 +2748,10 @@
                                 name: name,
                                 position: '', // Always start blank
                                 status: 'Ativo',
-                                vmax: 32.0,
-                                age: 24,
-                                height: 180,
-                                weight: 75,
+                                vmax: null,
+                                age: null,
+                                height: null,
+                                weight: null,
                                 tags: []
                             };
                         }
@@ -2761,15 +2775,24 @@
                                 name: name,
                                 position: '', // Always start blank
                                 status: 'Ativo',
-                                vmax: 32.0,
-                                age: 24,
-                                height: 180,
-                                weight: 75,
+                                vmax: null,
+                                age: null,
+                                height: null,
+                                weight: null,
                                 tags: []
                             };
                         }
                     }
                 });
+            }
+
+            function cleanNameForMatching(n) {
+                if (!n) return '';
+                return n.toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove accents
+                    .replace(/[^a-z0-9]/g, '') // remove non-alphanumeric characters
+                    .replace(/manuel/g, 'manel') // handle manuel/manel abbreviation
+                    .trim();
             }
 
             // Sobrescrever/atualizar informações a partir do appState.referencesData se for a lista de jogadores do Sheets
@@ -2779,7 +2802,16 @@
                     const nameVal = nameKey ? ref[nameKey] : '';
                     if (nameVal && String(nameVal).trim() !== '') {
                         const name = String(nameVal).trim();
-                        if (playerMap[name]) {
+                        const cleanN = cleanNameForMatching(name);
+                        
+                        // Find matching player key in playerMap
+                        let matchedKey = Object.keys(playerMap).find(k => {
+                            const cleanK = cleanNameForMatching(k);
+                            return cleanK === cleanN || cleanK.includes(cleanN) || cleanN.includes(cleanK);
+                        });
+                        
+                        if (matchedKey) {
+                            const player = playerMap[matchedKey];
                             const posKey = Object.keys(ref).find(k => /posição|posicao|position|role/i.test(k));
                             let positionVal = '';
                             if (posKey && ref[posKey]) {
@@ -2793,11 +2825,35 @@
                                     positionVal = 'Guarda-redes';
                                 }
                             }
-                            playerMap[name].position = positionVal;
+                            player.position = positionVal;
 
                             const statusKey = Object.keys(ref).find(k => /status|estado|ativo/i.test(k));
                             if (statusKey && ref[statusKey]) {
-                                playerMap[name].status = String(ref[statusKey]).trim();
+                                player.status = String(ref[statusKey]).trim();
+                            }
+
+                            const vmaxKey = Object.keys(ref).find(k => /vmax/i.test(k));
+                            if (vmaxKey && ref[vmaxKey]) {
+                                const rawVal = parseFloat(String(ref[vmaxKey]).replace(',', '.'));
+                                if (!isNaN(rawVal) && rawVal > 0) {
+                                    player.vmax = rawVal;
+                                }
+                            }
+
+                            const heightKey = Object.keys(ref).find(k => /altura|height/i.test(k));
+                            if (heightKey && ref[heightKey]) {
+                                const rawVal = parseFloat(String(ref[heightKey]).replace(',', '.'));
+                                if (!isNaN(rawVal) && rawVal > 0) {
+                                    player.height = rawVal;
+                                }
+                            }
+
+                            const weightKey = Object.keys(ref).find(k => /peso|weight/i.test(k));
+                            if (weightKey && ref[weightKey]) {
+                                const rawVal = parseFloat(String(ref[weightKey]).replace(',', '.'));
+                                if (!isNaN(rawVal) && rawVal > 0) {
+                                    player.weight = rawVal;
+                                }
                             }
                         }
                     }
@@ -3166,25 +3222,46 @@
                     const fadiga = Math.floor(Math.random() * 3) + 3;
                     const humor = Math.floor(Math.random() * 2) + 4;
                     
-                    let painScore = 1;
+                    let painScore = 0;
                     let painZone = '';
                     let allPains = [];
+
+                    const muscleLabels = {
+                        'Coxa_E': 'Isquios Esq.',
+                        'Coxa_D': 'Isquios Dir.',
+                        'Joelho_D': 'Joelho Dir.',
+                        'Joelho_E': 'Joelho Esq.',
+                        'Tornozelo_E': 'Tornozelo Esq.',
+                        'Tornozelo_D': 'Tornozelo Dir.',
+                        'Gemeo_D': 'Gémeo Dir.',
+                        'Gemeo_E': 'Gémeo Esq.',
+                        'Lombar': 'Lombar',
+                        'Pubis': 'Púbis'
+                    };
+
                     if (p.name === 'Ricardo Martins' && d > 24) {
-                        painScore = 4;
+                        // Multi-pain demo: isquios + joelho
+                        allPains = [
+                            { zone: 'Coxa_D', muscle: 'Isquios Dir.', score: 7 },
+                            { zone: 'Joelho_D', muscle: 'Joelho Dir.', score: 5 }
+                        ];
+                        painScore = 7;
                         painZone = 'Coxa_D';
-                        allPains = [{ zone: 'Coxa_D', muscle: 'Isquios Dir.', score: 4 }];
-                    } else if (Math.random() > 0.85) {
-                        painScore = Math.floor(Math.random() * 3) + 2;
-                        const zones = ['Coxa_E', 'Joelho_D', 'Tornozelo_E', 'Gemeo_D'];
-                        painZone = zones[Math.floor(Math.random() * zones.length)];
-                        const muscleLabels = {
-                            'Coxa_E': 'Isquios Esq.',
-                            'Coxa_D': 'Isquios Dir.',
-                            'Joelho_D': 'Joelho Dir.',
-                            'Tornozelo_E': 'Tornozelo Esq.',
-                            'Gemeo_D': 'Gémeo Dir.'
-                        };
-                        allPains = [{ zone: painZone, muscle: muscleLabels[painZone] || painZone, score: painScore }];
+                    } else if (Math.random() > 0.82) {
+                        // Single or dual pain zone
+                        const zones = ['Coxa_E', 'Coxa_D', 'Joelho_D', 'Tornozelo_E', 'Gemeo_D', 'Gemeo_E', 'Lombar'];
+                        const z1 = zones[Math.floor(Math.random() * zones.length)];
+                        const s1 = Math.floor(Math.random() * 7) + 2;
+                        allPains.push({ zone: z1, muscle: muscleLabels[z1] || z1, score: s1 });
+                        // 20% chance of a second pain zone
+                        if (Math.random() > 0.80) {
+                            const remaining = zones.filter(z => z !== z1);
+                            const z2 = remaining[Math.floor(Math.random() * remaining.length)];
+                            const s2 = Math.floor(Math.random() * 5) + 2;
+                            allPains.push({ zone: z2, muscle: muscleLabels[z2] || z2, score: s2 });
+                        }
+                        painScore = Math.max(...allPains.map(a => a.score));
+                        painZone = allPains[0].zone;
                     }
 
                     appState.wellnessData.push({
@@ -3327,7 +3404,7 @@
                 }
                 if (typeof cleanRow.painScore === 'string') {
                     const match = cleanRow.painScore.match(/\d+/);
-                    cleanRow.painScore = match ? parseInt(match[0], 10) : 1;
+                    cleanRow.painScore = match ? parseInt(match[0], 10) : 0;
                 }
                 const metricFields = ['dist', 'hsr', 'sprint', 'pl', 'mmin', 'accAlta', 'dccAlta', 'metab', 'pse', 'duration', 'metrosSprint', 'topSpeedKmh'];
                 metricFields.forEach(f => {
@@ -3407,14 +3484,21 @@
             }
 
             try {
-                if (referencesUrl) {
-                    try {
-                        const jsonpData = await fetchGoogleSheetJsonp(referencesUrl);
-                        parsedReferences = parseGvizJson(jsonpData, 'references');
-                    } catch (refErr) {
-                        const fallbackUrl = convertGoogleSheetUrlToGvizUrl(wellnessUrlRaw, null, 'Referencias');
-                        const jsonpData = await fetchGoogleSheetJsonp(fallbackUrl);
-                        parsedReferences = parseGvizJson(jsonpData, 'references');
+                if (wellnessUrlRaw) {
+                    const possibleTabs = ['Perfil_Atletas', 'Referências', 'Referencias', 'Plantel', 'Jogadores', 'Atletas'];
+                    for (const tab of possibleTabs) {
+                        try {
+                            const refUrl = convertGoogleSheetUrlToGvizUrl(wellnessUrlRaw, null, tab);
+                            const jsonpData = await fetchGoogleSheetJsonp(refUrl);
+                            const parsedRef = parseGvizJson(jsonpData, 'references');
+                            if (parsedRef && parsedRef.length > 0) {
+                                parsedReferences = parsedRef;
+                                console.log(`Auto-sync loaded player references from tab: ${tab}`);
+                                break;
+                            }
+                        } catch (e) {
+                            // Try next tab
+                        }
                     }
                 }
             } catch (err) {
@@ -3527,7 +3611,7 @@
             mapped.pse = extractNum(row["PSE"] || row["pse"], 0);
             mapped.duration = extractNum(row["Duracao_Minutos"] || row["duration"], 0);
             mapped.srpe = mapped.pse * mapped.duration;
-            let maxPain = 1;
+            let maxPain = 0;
             let painZone = '';
 
             const painKeys = [
@@ -3569,8 +3653,8 @@
                     const keyLower = pk.key.toLowerCase().replace(/[_\s-]/g, '');
                     const altLower = pk.altKey.toLowerCase().replace(/[_\s-]/g, '');
                     if (headerLower.includes(keyLower) || headerLower.includes(altLower)) {
-                        const val = extractNum(row[k], 1);
-                        if (val >= 2 && !seenZones.has(pk.name + '_' + pk.label)) {
+                        const val = extractNum(row[k], 0);
+                        if (val >= 1 && !seenZones.has(pk.name + '_' + pk.label)) {
                             allPains.push({ zone: pk.name, muscle: pk.label, score: val });
                             seenZones.add(pk.name + '_' + pk.label);
                         }
@@ -3597,8 +3681,28 @@
             mapped.date = parseGoogleSheetsDate(rawDate) || appState.currentDate;
 
             mapped.name = row["ID_Jogador"] || row["name"] || "";
-            mapped.microcycle = row["Exercicio"] || row["microcycle"] || "MD-3";
-            mapped.type = (mapped.microcycle.includes('Jogo') || mapped.microcycle === 'MD') ? 'Jogo' : 'Treino';
+            
+            let rawDia = row["Dia"] || row["dia"] || "";
+            let rawEx = row["Exercicio"] || row["exercicio"] || row["microcycle"] || "";
+            
+            // Resolve microcycle day: check 'Dia' first, then fallback to 'Exercicio'
+            let rawMicro = rawDia || rawEx || "";
+            let microcycle = "";
+            if (rawMicro) {
+                const mcMatch = String(rawMicro).match(/MD[-+]\d+|MD/i);
+                microcycle = mcMatch ? mcMatch[0].toUpperCase() : rawMicro;
+            }
+            mapped.microcycle = microcycle;
+            
+            // Resolve exercise tag: if 'Dia' is absent, clean any leading MD code from 'Exercicio'
+            let cleanEx = rawEx;
+            if (!rawDia && rawEx) {
+                cleanEx = String(rawEx).replace(/MD[-+]\d+\s*[-/:]*\s*|MD\s*[-/:]*\s*/i, '').trim();
+            }
+            mapped.exercise = cleanEx || rawEx || "";
+            
+            // Resolve session type
+            mapped.type = (String(rawEx).toLowerCase().includes('jogo') || mapped.microcycle === 'MD') ? 'Jogo' : 'Treino';
             mapped.participation = row["Participacao"] || row["participation"] || "PARTICIPAÇÃO_TOTAL";
             mapped.tagGroup = row["Tag_Grupo"] || row["tagGroup"] || "";
             
@@ -3621,9 +3725,9 @@
             mapped.dccAlta = parseNum(row["DCC_Alta"] || row["dccAlta"]);
             mapped.metrosSprint = parseNum(row["Metros_Sprint"] || row["metrosSprint"]);
             mapped.topSpeedKmh = parseNum(row["Top_Speed_kmh"] || row["topSpeedKmh"]);
-            mapped.duration = parseNum(row["Duracao"] || row["duration"] || row["Duração"] || row["tempo"]) || 70;
+            mapped.duration = parseNum(row["Duracao"] || row["duration"] || row["Duração"] || row["tempo"]);
             mapped.pse = parseNum(row["PSE"] || row["pse"]);
-            mapped.srpe = parseNum(row["sRPE"] || row["srpe"]) || (mapped.pse * mapped.duration);
+            mapped.srpe = parseNum(row["sRPE"] || row["srpe"]) || (mapped.pse * (mapped.duration || 70));
 
             return mapped;
         }
@@ -3927,14 +4031,21 @@
             }
 
             try {
-                if (referencesUrl) {
-                    try {
-                        const jsonpData = await fetchGoogleSheetJsonp(referencesUrl);
-                        parsedReferences = parseGvizJson(jsonpData, 'references');
-                    } catch (refErr) {
-                        const fallbackUrl = convertGoogleSheetUrlToGvizUrl(rawWellnessUrl, null, 'Referencias');
-                        const jsonpData = await fetchGoogleSheetJsonp(fallbackUrl);
-                        parsedReferences = parseGvizJson(jsonpData, 'references');
+                if (rawWellnessUrl) {
+                    const possibleTabs = ['Perfil_Atletas', 'Referências', 'Referencias', 'Plantel', 'Jogadores', 'Atletas'];
+                    for (const tab of possibleTabs) {
+                        try {
+                            const refUrl = convertGoogleSheetUrlToGvizUrl(rawWellnessUrl, null, tab);
+                            const jsonpData = await fetchGoogleSheetJsonp(refUrl);
+                            const parsedRef = parseGvizJson(jsonpData, 'references');
+                            if (parsedRef && parsedRef.length > 0) {
+                                parsedReferences = parsedRef;
+                                console.log(`Manual sync loaded player references from tab: ${tab}`);
+                                break;
+                            }
+                        } catch (e) {
+                            // Try next tab
+                        }
                     }
                 }
             } catch (err) {
@@ -3969,7 +4080,16 @@
 
             if (statusElem) {
                 statusElem.style.color = 'var(--color-green)';
-                statusElem.textContent = successMessage;
+                const mappedPlayers = appState.players.filter(p => p.position);
+                const unmappedPlayers = appState.players.filter(p => !p.position);
+                let debugMsg = successMessage;
+                if (mappedPlayers.length > 0) {
+                    debugMsg += `<br><small style="color:#0f172a; display:block; margin-top:5px;"><strong>Mapeados:</strong> ${mappedPlayers.map(p => `${p.name} (${p.position})`).join(', ')}</small>`;
+                }
+                if (unmappedPlayers.length > 0) {
+                    debugMsg += `<br><small style="color:#64748b; display:block; margin-top:3px;"><strong>Sem Posição:</strong> ${unmappedPlayers.map(p => p.name).join(', ')}</small>`;
+                }
+                statusElem.innerHTML = debugMsg;
             }
 
             // Re-mapear e construir os jogadores recolhidos dinamicamente da planilha
@@ -4285,10 +4405,10 @@
                     pWellness.forEach(d => {
                         if (d.allPains && d.allPains.length > 0) {
                             d.allPains.forEach(ap => {
-                                allDetailedPains.push(`${ap.muscle}: ${ap.score}/5`);
+                                allDetailedPains.push(`${ap.muscle}: ${ap.score}/10`);
                             });
-                        } else if (d.painScore > 1 && d.painZone) {
-                            allDetailedPains.push(`${translatePainZone(d.painZone)}: ${d.painScore}/5`);
+                        } else if (d.painScore > 0 && d.painZone) {
+                            allDetailedPains.push(`${translatePainZone(d.painZone)}: ${d.painScore}/10`);
                         }
                     });
                     const uniqueDetailedPains = [...new Set(allDetailedPains)];
@@ -4327,27 +4447,40 @@
             roster.forEach(p => {
                 const pGps = groups[p.name] || [];
                 if (pGps.length > 0) {
+                    // Try to find matching wellness record for this athlete on this date
+                    const w = appState.wellnessData.find(row => row.name === p.name && row.date === refDate);
+
+                    // Sum of volumes
                     const totalDist = pGps.reduce((sum, g) => sum + (Number(g.dist) || 0), 0);
                     const totalHsr = pGps.reduce((sum, g) => sum + (Number(g.hsr) || 0), 0);
                     const totalSprint = pGps.reduce((sum, g) => sum + (Number(g.sprint) || 0), 0);
                     const totalPL = pGps.reduce((sum, g) => sum + (Number(g.pl) || 0), 0);
-                    const totalDuration = pGps.reduce((sum, g) => sum + (Number(g.duration) || 0), 0);
-                    
-                    const avgDist = Math.round(totalDist / pGps.length);
-                    const avgHsr = Math.round(totalHsr / pGps.length);
-                    const avgSprint = Math.round(totalSprint / pGps.length);
-                    const avgPL = Math.round(totalPL / pGps.length);
-                    const avgDuration = Math.round(totalDuration / pGps.length);
-                    
-                    const avgMMin = avgDuration > 0 ? parseFloat((avgDist / avgDuration).toFixed(1)) : 0;
-                    const avgMetab = parseFloat((pGps.reduce((sum, g) => sum + g.metab, 0) / pGps.length).toFixed(1));
-                    const avgPSE = parseFloat((pGps.reduce((sum, g) => sum + g.pse, 0) / pGps.length).toFixed(1));
-                    const avgSRPE = Math.round(pGps.reduce((sum, g) => sum + g.srpe, 0) / pGps.length);
+                    const totalAcc = pGps.reduce((sum, g) => sum + (Number(g.accAlta) || 0), 0);
+                    const totalDcc = pGps.reduce((sum, g) => sum + (Number(g.dccAlta) || 0), 0);
 
-                    const sumAcc = pGps.reduce((sum, g) => sum + g.accAlta, 0);
-                    const sumDcc = pGps.reduce((sum, g) => sum + g.dccAlta, 0);
-                    const avgAcc = parseFloat((sumAcc / pGps.length).toFixed(1));
-                    const avgDcc = parseFloat((sumDcc / pGps.length).toFixed(1));
+                    // Resolve duration: always use Wellness duration if available, fallback to sum of GPS exercise durations
+                    let totalDuration = 0;
+                    if (w && w.duration > 0) {
+                        totalDuration = w.duration;
+                    } else {
+                        totalDuration = pGps.reduce((sum, g) => sum + (Number(g.duration) || 0), 0);
+                    }
+                    if (totalDuration <= 0) totalDuration = 70; // safe default
+
+                    // Resolve PSE and sRPE: use Wellness values if available
+                    let avgPSE = 0;
+                    let totalSRPE = 0;
+                    if (w && w.pse > 0) {
+                        avgPSE = w.pse;
+                        totalSRPE = w.srpe || (w.pse * totalDuration);
+                    } else {
+                        avgPSE = parseFloat((pGps.reduce((sum, g) => sum + (Number(g.pse) || 0), 0) / pGps.length).toFixed(1));
+                        totalSRPE = pGps.reduce((sum, g) => sum + (Number(g.srpe) || 0), 0) || (avgPSE * totalDuration);
+                    }
+
+                    // Averages of intensities
+                    const avgMMin = totalDuration > 0 ? parseFloat((totalDist / totalDuration).toFixed(1)) : 0;
+                    const avgMetab = parseFloat((pGps.reduce((sum, g) => sum + (Number(g.metab) || 0), 0) / pGps.length).toFixed(1));
 
                     const ewma = getAthleteEWMA(p.name, 'pl', refDate);
                     const ewmaMech = getAthleteEWMA(p.name, 'dist', refDate);
@@ -4359,16 +4492,16 @@
                     list.push({
                         name: p.name,
                         participation: partText,
-                        dist: avgDist,
-                        hsr: avgHsr,
-                        sprint: avgSprint,
+                        dist: totalDist,
+                        hsr: totalHsr,
+                        sprint: totalSprint,
                         mmin: avgMMin,
                         metab: avgMetab,
-                        accAlta: avgAcc,
-                        dccAlta: avgDcc,
+                        accAlta: totalAcc,
+                        dccAlta: totalDcc,
                         pse: avgPSE,
-                        srpe: avgSRPE,
-                        duration: avgDuration,
+                        srpe: totalSRPE,
+                        duration: totalDuration,
                         acwr: ewma.acwr,
                         acwrMech: ewmaMech.acwr,
                         freshness: Math.round(ewma.chronic - ewma.acute),
@@ -4595,7 +4728,7 @@
             agg.forEach(item => {
                 sum += item.avg;
                 count++;
-                if (item.painScore >= 3) painAlerts++;
+                if (item.painScore >= 4) painAlerts++;
             });
 
             document.getElementById('pre-kpi-avg').textContent = count > 0 ? (sum / count).toFixed(1) : '0.0';
@@ -4647,8 +4780,8 @@
                     <td>${item.fadiga} / 5</td>
                     <td>${item.humor} / 5</td>
                     <td>
-                        <span class="status-badge ${item.painScore >= 3 ? 'badge-red' : item.painScore === 2 ? 'badge-yellow' : 'badge-green'}" style="text-transform:none;">
-                            ${item.painScore > 1 ? translatePainZone(item.painZone) : 'Sem queixas'}
+                        <span class="status-badge ${item.painScore >= 7 ? 'badge-red' : item.painScore >= 4 ? 'badge-yellow' : 'badge-green'}" style="text-transform:none;">
+                            ${item.painScore > 0 ? translatePainZone(item.painZone) + ' (' + item.painScore + '/10)' : 'Sem queixas'}
                         </span>
                     </td>
                 `;
@@ -4676,22 +4809,36 @@
             // Resets pain highlight
             document.querySelectorAll('.pain-region').forEach(el => {
                 el.className.baseVal = 'pain-region';
+                el.innerHTML = '';
             });
 
             const painBox = document.getElementById('pre-ind-pain-report');
             
             if (myWdList.length > 0) {
                 const sortedByDate = [...myWdList].sort((a,b) => b.date.localeCompare(a.date));
-                const activePain = sortedByDate.find(w => w.painScore >= 3 && w.painZone);
+                const latestPain = sortedByDate.find(w => w.painScore > 0);
                 
-                if (activePain) {
-                    const regionEl = document.querySelector(`[data-region="${activePain.painZone}"]`);
-                    if (regionEl) {
-                        regionEl.className.baseVal = `pain-region pain-level-${activePain.painScore}`;
+                if (latestPain) {
+                    let displayPains = [];
+                    if (latestPain.allPains && latestPain.allPains.length > 0) {
+                        displayPains = latestPain.allPains;
+                    } else if (latestPain.painZone) {
+                        displayPains = [{ zone: latestPain.painZone, muscle: translatePainZone(latestPain.painZone), score: latestPain.painScore }];
                     }
+
+                    displayPains.forEach(ap => {
+                        const regionEl = document.querySelector(`[data-region="${ap.zone}"]`);
+                        if (regionEl) {
+                            regionEl.className.baseVal = `pain-region pain-level-${ap.score}`;
+                            regionEl.innerHTML = `<title>${ap.muscle}: ${ap.score}/10</title>`;
+                        }
+                    });
+
                     painBox.innerHTML = `
-                        <div style="color: var(--trofense-red); font-weight:700;">Dor Recente: ${translatePainZone(activePain.painZone)}</div>
-                        <div style="font-size:11px; margin-top:2px;">Escala: ${activePain.painScore} / 5 (a ${activePain.date.substring(5)})</div>
+                        <div style="color: var(--trofense-red); font-weight:700; margin-bottom: 4px;">Dor Recente (${latestPain.date.substring(5)}):</div>
+                        <div style="font-size:11px; margin-top:2px; line-height: 1.4;">
+                            ${displayPains.map(ap => `• <strong>${ap.muscle}</strong>: ${ap.score}/10`).join('<br>')}
+                        </div>
                     `;
                 } else {
                     painBox.innerHTML = `<strong>Sem Dores Registadas</strong>`;
@@ -4882,14 +5029,14 @@
                     // Se allPains vazio mas há painZone, construi lista a partir do fallback
                     let displayPains = (w.allPains && w.allPains.length > 0)
                         ? w.allPains
-                        : (w.painScore > 1 && w.painZone)
+                        : (w.painScore > 0 && w.painZone)
                             ? [{ zone: w.painZone, muscle: translatePainZone(w.painZone), score: w.painScore }]
                             : [];
 
                     if (displayPains.length > 0) {
                         painHtml = displayPains.map(pain => {
-                            const badgeColor = pain.score >= 3 ? 'badge-red' : 'badge-yellow';
-                            return `<span class="status-badge ${badgeColor}" style="margin-right:3px; margin-bottom:3px; display:inline-block; font-size:10px; padding:2px 5px; font-weight:600; text-transform:none; white-space:nowrap;">${pain.muscle} (${pain.score}/5)</span>`;
+                            const badgeColor = pain.score >= 7 ? 'badge-red' : 'badge-yellow';
+                            return `<span class="status-badge ${badgeColor}" style="margin-right:3px; margin-bottom:3px; display:inline-block; font-size:10px; padding:2px 5px; font-weight:600; text-transform:none; white-space:nowrap;">${pain.muscle} (${pain.score}/10)</span>`;
                         }).join('');
                     }
 
@@ -4908,11 +5055,11 @@
                     if (w.fadiga < 3) alerts.push('Fadiga');
                     if (w.stress < 3) alerts.push('Stress');
                     if (w.humor < 3) alerts.push('Humor');
-                    if (w.painScore >= 3) alerts.push('Dor Clínico');
+                    if (w.painScore >= 7) alerts.push('Dor Clínico');
 
                     if (alerts.length > 0) {
                         statusHtml = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px;">🚨 Alerta: ${alerts.join(', ')}</span>`;
-                    } else if (w.sono < (avgSonoVal - 0.7) || w.fadiga < (avgFadigaVal - 0.7) || w.stress < (avgStressVal - 0.7) || w.humor < (avgHumorVal - 0.7) || w.painScore === 2) {
+                    } else if (w.sono < (avgSonoVal - 0.7) || w.fadiga < (avgFadigaVal - 0.7) || w.stress < (avgStressVal - 0.7) || w.humor < (avgHumorVal - 0.7) || w.painScore >= 4) {
                         statusHtml = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px;">⚠️ Desvio Clínico</span>`;
                     }
                 } else {
@@ -5092,7 +5239,7 @@
 
             const timeData = getFilteredTimeData();
             const wellnessPeriod = timeData.wellness;
-            const urgentCases = wellnessPeriod.filter(w => w.painScore >= 3);
+            const urgentCases = wellnessPeriod.filter(w => w.painScore >= 4);
 
             document.getElementById('dm-alerts-count').textContent = `${urgentCases.length} Ocorrências`;
 
@@ -5112,7 +5259,7 @@
                             <strong>${c.name}</strong>
                             <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">Região: ${translatePainZone(c.painZone)}</div>
                         </div>
-                        <span class="status-badge badge-red">Dor: ${c.painScore} / 5</span>
+                        <span class="status-badge badge-red">Dor: ${c.painScore} / 10</span>
                     `;
                     listContainer.appendChild(div);
                 });
@@ -5437,15 +5584,20 @@
                 excludedElem.textContent = excludedList.length > 0 ? excludedList.join(', ') : 'Nenhum atleta excluído';
             }
 
-            const activeCount = todayGpsAll.filter(g => g.participation === 'Completa' || g.participation === 'Parcial').length;
-            const duration = myGpsToday ? myGpsToday.duration : 70;
-            const microcycle = myGpsToday ? myGpsToday.microcycle : 'MD-3';
+            // Resolve duration from Wellness responses if available
+            const todayWellness = appState.wellnessData.filter(w => w.date === appState.currentDate);
+            const wellnessDurations = todayWellness.map(w => w.duration).filter(d => d > 0);
+            const wellnessDur = wellnessDurations.length > 0 ? Math.max(...wellnessDurations) : 0;
+
+            const activeCount = new Set(todayGpsAll.filter(g => g.participation !== 'AUSENTE_GINÁSIO_DM').map(g => g.name)).size;
+            const duration = wellnessDur || (myGpsToday ? myGpsToday.duration : 0) || 70;
+            const microcycle = (myGpsToday && myGpsToday.microcycle) ? myGpsToday.microcycle : '';
 
             const omitMicrocycle = document.getElementById('report-omit-microcycle-chk')?.checked || false;
             const infoElem = document.getElementById('report-header-session-info');
             if (infoElem) {
                 infoElem.innerHTML = `
-                    ${omitMicrocycle ? '' : `Dia Microciclo: <strong>${microcycle}</strong><br>`}
+                    ${(omitMicrocycle || !microcycle) ? '' : `Dia Microciclo: <strong>${microcycle}</strong><br>`}
                     Duração Sessão: <strong>${duration} min</strong><br>
                     Plantel Ativo: <strong>${activeCount} jogadores</strong>
                 `;
@@ -5556,7 +5708,7 @@
                 
                 const mySector = myPos ? (((myPos.includes('Defesa') || myPos.includes('Lateral')) ? 'Defesa' :
                                  (myPos.includes('Médio')) ? 'Médio' :
-                                 (myPos.includes('Extremo') || myPos.includes('Ponta')) ? 'Avançado' : 'Guarda-redes')) : 'Outro';
+                                 (myPos.includes('Extremo') || myPos.includes('Ponta')) ? 'Atacante' : 'Guarda-redes')) : 'Outro';
                 
                 const sameSectorRows = todayGpsAll.filter(g => {
                     const gp = appState.players.find(x => x.name === g.name);
@@ -5564,7 +5716,7 @@
                     const gpPos = gp.position || '';
                     const gps = gpPos ? (((gpPos.includes('Defesa') || gpPos.includes('Lateral')) ? 'Defesa' :
                                  (gpPos.includes('Médio')) ? 'Médio' :
-                                 (gpPos.includes('Extremo') || gpPos.includes('Ponta')) ? 'Avançado' : 'Guarda-redes')) : 'Outro';
+                                 (gpPos.includes('Extremo') || gpPos.includes('Ponta')) ? 'Atacante' : 'Guarda-redes')) : 'Outro';
                     return gps === mySector;
                 });
 
@@ -5648,7 +5800,7 @@
                     ];
 
                     myGpsList.forEach((row, idx) => {
-                        const exerciseName = row.microcycle || 'Exercício';
+                        const exerciseName = row.exercise || row.microcycle || 'Exercício';
                         const rowDuration = row.duration || 1;
                         const mminVal = Math.round((row.mmin / matchRef.mmin) * 100);
                         const hsrMinVal = Math.round(((row.hsr / rowDuration) / matchRef.hsrMin) * 100);
@@ -5770,23 +5922,25 @@
                         let painStatus = '<span class="status-badge badge-green" style="font-weight: 700; padding: 2px 6px;">Sem queixas de dor</span>';
                         if (todayW.allPains && todayW.allPains.length > 0) {
                             const badges = todayW.allPains.map(pain => {
-                                const badgeColor = pain.score >= 3 ? 'badge-red' : 'badge-yellow';
-                                return `<span class="status-badge ${badgeColor}" style="font-weight: 700; padding: 2px 6px; margin-right: 4px; text-transform:none;">${pain.muscle}: ${pain.score}/5</span>`;
+                                const badgeColor = pain.score >= 7 ? 'badge-red' : 'badge-yellow';
+                                return `<span class="status-badge ${badgeColor}" style="font-weight: 700; padding: 2px 6px; margin-right: 4px; text-transform:none;">${pain.muscle}: ${pain.score}/10</span>`;
                             }).join(' ');
                             painStatus = badges;
-                        } else if (todayW.painScore >= 3) {
-                            painStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px; text-transform:none;">🚨 Risco Clínico: Dor Moderada/Forte em ${translatePainZone(todayW.painZone)}</span>`;
-                        } else if (todayW.painScore === 2) {
-                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px; text-transform:none;">⚠️ Dor Ligeira em ${translatePainZone(todayW.painZone)}</span>`;
+                        } else if (todayW.painScore >= 7) {
+                            painStatus = `<span class="status-badge badge-red" style="font-weight: 700; padding: 2px 6px; text-transform:none;">🚨 Risco Clínico: Dor Forte em ${translatePainZone(todayW.painZone)}</span>`;
+                        } else if (todayW.painScore >= 4) {
+                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px; text-transform:none;">⚠️ Dor Moderada em ${translatePainZone(todayW.painZone)}</span>`;
+                        } else if (todayW.painScore >= 1) {
+                            painStatus = `<span class="status-badge badge-yellow" style="font-weight: 700; padding: 2px 6px; text-transform:none; background-color: #fef08a; color: #854d0e;">⚠️ Dor Ligeira em ${translatePainZone(todayW.painZone)}</span>`;
                         }
                         
                         let painDisplay = 'Nenhuma';
                         if (todayW.allPains && todayW.allPains.length > 0) {
-                            painDisplay = todayW.allPains.map(p => `${p.muscle} (${p.score})`).join(', ');
+                            painDisplay = todayW.allPains.map(p => `${p.muscle} (${p.score}/10)`).join(', ');
                         } else if (todayW.painZone) {
-                            painDisplay = `${todayW.painScore}/5 (${translatePainZone(todayW.painZone)})`;
-                        } else if (todayW.painScore > 1) {
-                            painDisplay = `${todayW.painScore}/5`;
+                            painDisplay = `${todayW.painScore}/10 (${translatePainZone(todayW.painZone)})`;
+                        } else if (todayW.painScore > 0) {
+                            painDisplay = `${todayW.painScore}/10`;
                         }
                         rowsHtml += buildWRow('Dor Clínico / Região', painDisplay, 'Histórico Local', painStatus);
                     } else {
@@ -6166,14 +6320,18 @@
             }
 
             // Session info details
-            const activeCount = roster.length;
-            const duration = gpsPeriod[0] ? gpsPeriod[0].duration : 70;
-            const microcycle = gpsPeriod[0] ? gpsPeriod[0].microcycle : 'MD-2';
+            const todayWellness = appState.wellnessData.filter(w => w.date === appState.currentDate);
+            const wellnessDurations = todayWellness.map(w => w.duration).filter(d => d > 0);
+            const wellnessDur = wellnessDurations.length > 0 ? Math.max(...wellnessDurations) : 0;
+            
+            const activeCount = new Set(todayGps.filter(g => g.participation !== 'AUSENTE_GINÁSIO_DM').map(g => g.name)).size;
+            const duration = wellnessDur || (todayGps[0] ? todayGps[0].duration : 0) || 70;
+            const microcycle = (todayGps[0] && todayGps[0].microcycle) ? todayGps[0].microcycle : '';
             
             const infoElem = document.getElementById('print-header-session-info');
             if (infoElem) {
                 infoElem.innerHTML = `
-                    Dia Microciclo: <strong>${microcycle}</strong><br>
+                    ${microcycle ? `Dia Microciclo: <strong>${microcycle}</strong><br>` : ''}
                     Duração Sessão: <strong>${duration} min</strong><br>
                     Plantel Ativo: <strong>${activeCount} jogadores</strong>
                 `;
@@ -6208,7 +6366,7 @@
                 const infoElemInd = document.getElementById('print-header-session-info-ind');
                 if (infoElemInd) {
                     infoElemInd.innerHTML = `
-                        Dia Microciclo: <strong>${microcycle}</strong><br>
+                        ${microcycle ? `Dia Microciclo: <strong>${microcycle}</strong><br>` : ''}
                         Duração Sessão: <strong>${duration} min</strong><br>
                         Plantel Ativo: <strong>${activeCount} jogadores</strong>
                     `;
@@ -6378,26 +6536,48 @@
                 return 'rgba(15, 76, 129, 0.85)'; // Trofense Blue
             });
 
+            function mapRawPositionToStandard(rawPos) {
+                if (!rawPos) return '';
+                const pos = rawPos.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                if (pos.includes('defesa central') || pos === 'dc') return 'Defesa Central';
+                if (pos.includes('lateral')) return 'Lateral';
+                if (pos.includes('medio')) return 'Médio';
+                if (pos.includes('extremo')) return 'Extremo';
+                if (pos.includes('ponta de lanca') || pos.includes('ponta de lança') || pos === 'pl') return 'Ponta de Lança';
+                return '';
+            }
+
             // 2. Position labels and values (accumulate/sum values to show total positional load and normalize to prevent encoding mismatches)
             const posMap = {};
             agg.forEach(g => {
                 const player = appState.players.find(x => x.name === g.name);
                 if (player) {
-                    const playerPos = (player.position || '').normalize('NFC');
-                    if (!posMap[playerPos]) posMap[playerPos] = [];
-                    posMap[playerPos].push(Number(g[metricKey]) || 0);
+                    let playerPos = player.position || '';
+                    if (!playerPos && g.tagGroup) {
+                        playerPos = mapGroupToPosition(g.tagGroup);
+                    }
+                    if (!playerPos && player.tags) {
+                        const tagGroup = player.tags.find(t => t.startsWith('#'))?.replace('#', '') || '';
+                        if (tagGroup) {
+                            playerPos = mapGroupToPosition(tagGroup);
+                        }
+                    }
+                    const stdPos = mapRawPositionToStandard(playerPos);
+                    if (stdPos) {
+                        if (!posMap[stdPos]) posMap[stdPos] = [];
+                        posMap[stdPos].push(Number(g[metricKey]) || 0);
+                    }
                 }
             });
             
             const positions = [
-                'Defesa Central'.normalize('NFC'),
-                'Lateral'.normalize('NFC'),
-                'Médio Defensivo'.normalize('NFC'),
-                'Médio Ofensivo'.normalize('NFC'),
-                'Extremo'.normalize('NFC'),
-                'Ponta de Lança'.normalize('NFC')
+                'Defesa Central',
+                'Lateral',
+                'Médio',
+                'Extremo',
+                'Ponta de Lança'
             ];
-            const clearPosLabels = ['Def. Central', 'Lateral', 'Médio Def.', 'Médio Of.', 'Extremo', 'Ponta Lança'];
+            const clearPosLabels = ['Def. Central', 'Lateral', 'Médio', 'Extremo', 'Ponta Lança'];
             
             const posValues = positions.map(pos => {
                 const vals = posMap[pos] || [];
@@ -6407,20 +6587,30 @@
 
             // 3. Sector labels and values (accumulate/sum values to see which sector is more loaded)
             const sectorMap = {};
-            const sectors = ['Defesa'.normalize('NFC'), 'Médio'.normalize('NFC'), 'Avançado'.normalize('NFC')];
+            const sectors = ['Defesa', 'Médio', 'Atacante'];
             sectors.forEach(sec => { sectorMap[sec] = []; });
 
             agg.forEach(g => {
                 const player = appState.players.find(x => x.name === g.name);
                 if (player) {
-                    const playerPos = (player.position || '').normalize('NFC');
+                    let playerPos = player.position || '';
+                    if (!playerPos && g.tagGroup) {
+                        playerPos = mapGroupToPosition(g.tagGroup);
+                    }
+                    if (!playerPos && player.tags) {
+                        const tagGroup = player.tags.find(t => t.startsWith('#'))?.replace('#', '') || '';
+                        if (tagGroup) {
+                            playerPos = mapGroupToPosition(tagGroup);
+                        }
+                    }
+                    const stdPos = mapRawPositionToStandard(playerPos);
                     let sector = '';
-                    if (playerPos === 'Defesa Central'.normalize('NFC') || playerPos === 'Lateral'.normalize('NFC')) {
-                        sector = 'Defesa'.normalize('NFC');
-                    } else if (playerPos === 'Médio Defensivo'.normalize('NFC') || playerPos === 'Médio Ofensivo'.normalize('NFC')) {
-                        sector = 'Médio'.normalize('NFC');
-                    } else if (playerPos === 'Extremo'.normalize('NFC') || playerPos === 'Ponta de Lança'.normalize('NFC')) {
-                        sector = 'Avançado'.normalize('NFC');
+                    if (stdPos === 'Defesa Central' || stdPos === 'Lateral') {
+                        sector = 'Defesa';
+                    } else if (stdPos === 'Médio') {
+                        sector = 'Médio';
+                    } else if (stdPos === 'Extremo' || stdPos === 'Ponta de Lança') {
+                        sector = 'Atacante';
                     }
                     
                     if (sector) {
@@ -6810,10 +7000,14 @@
                     const todayTop = myGpsTodayList.reduce((max, r) => Math.max(max, r.topSpeedKmh || 0), 0);
                     todaySpeeds.push(parseFloat(todayTop.toFixed(1)));
 
-                    // Recorde: Vmax de perfil tratada
-                    const pVmaxRaw = Number(p.vmax) || 32.0;
-                    const pVmaxKmh = pVmaxRaw < 15 ? pVmaxRaw * 3.6 : pVmaxRaw;
-                    bestSpeeds.push(parseFloat(pVmaxKmh.toFixed(1)));
+                    // Recorde: Vmax de perfil tratada (se não existir, fica null para não desenhar a barra)
+                    if (p.vmax !== null && p.vmax !== undefined && p.vmax > 0) {
+                        const pVmaxRaw = Number(p.vmax);
+                        const pVmaxKmh = pVmaxRaw < 15 ? pVmaxRaw * 3.6 : pVmaxRaw;
+                        bestSpeeds.push(parseFloat(pVmaxKmh.toFixed(1)));
+                    } else {
+                        bestSpeeds.push(null);
+                    }
                 }
             });
 
@@ -7030,7 +7224,7 @@
                     }
                 } else {
                     // Try to find if player performed this specific drill today
-                    const drillRow = myGpsList.find(g => g.microcycle === d.key);
+                    const drillRow = myGpsList.find(g => (g.exercise || g.microcycle) === d.key);
                     if (drillRow) {
                         const dur = drillRow.duration || 1;
                         currentValues = [
@@ -8109,55 +8303,89 @@
         }
 
         function changeUserRole(role) {
-            // Bloqueado na versão do Departamento Médico
+            localStorage.setItem('trofense_user_role', role);
+            applyRoleAccessControl(role);
         }
 
-        function applyRoleAccessControl() {
-            // HARDCODED LOCK FOR MEDICAL DEPT
-            const role = 'medico';
+        function applyRoleAccessControl(forcedRole) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRole = urlParams.get('role') || urlParams.get('mode') || urlParams.get('perfil');
+            
+            let role = 'completo';
+            if (forcedRole) {
+                role = forcedRole;
+            } else if (urlRole) {
+                role = urlRole;
+                localStorage.setItem('trofense_user_role', role);
+            } else {
+                role = localStorage.getItem('trofense_user_role') || 'completo';
+            }
+
+            // Normalize role name
+            if (role === 'medical' || role === 'dm' || role === 'medico') {
+                role = 'medico';
+            } else {
+                role = 'completo';
+            }
 
             // Update dropdown value if it exists
             const selectEl = document.getElementById('user-role-select');
             if (selectEl) {
-                selectEl.style.display = 'none'; // Esconder o dropdown na versão médica
-                if (selectEl.parentElement) {
-                    selectEl.parentElement.style.display = 'none'; // Esconder toda a div do filtro de acesso
-                }
+                selectEl.value = role;
             }
 
             const items = document.querySelectorAll('.tab-controller-links .nav-item');
             
-            // Hide other tabs
-            items.forEach(item => {
-                const tab = item.getAttribute('data-tab');
-                if (tab !== 'dm') {
-                    item.style.display = 'none';
-                } else {
+            if (role === 'medico') {
+                // Hide other tabs
+                items.forEach(item => {
+                    const tab = item.getAttribute('data-tab');
+                    if (tab !== 'dm') {
+                        item.style.display = 'none';
+                    } else {
+                        item.style.display = 'block';
+                    }
+                });
+
+                // Auto-switch to medical tab if current active tab is hidden
+                const activeTabEl = document.querySelector('.tab-controller-links .nav-item.active');
+                const activeTab = activeTabEl ? activeTabEl.getAttribute('data-tab') : '';
+                if (activeTab !== 'dm') {
+                    const dmTabButton = document.querySelector('.tab-controller-links .nav-item[data-tab="dm"]');
+                    if (dmTabButton) {
+                        dmTabButton.click();
+                    }
+                }
+                
+                // Customize user profile display in footer
+                const userAvatar = document.querySelector('.sidebar-footer .avatar');
+                if (userAvatar) userAvatar.textContent = 'DM';
+                const userName = document.querySelector('.sidebar-footer .user-details h4');
+                if (userName) userName.textContent = 'Staff Médico';
+                const userRole = document.querySelector('.sidebar-footer .user-details p');
+                if (userRole) userRole.textContent = 'Departamento Médico';
+
+                // Hide database sync button for medical staff
+                const syncBtn = document.getElementById('btn-sync-database');
+                if (syncBtn) syncBtn.style.display = 'none';
+            } else {
+                // Show all tabs
+                items.forEach(item => {
                     item.style.display = 'block';
-                }
-            });
+                });
+                
+                // Restore default user profile
+                const userAvatar = document.querySelector('.sidebar-footer .avatar');
+                if (userAvatar) userAvatar.textContent = 'OM';
+                const userName = document.querySelector('.sidebar-footer .user-details h4');
+                if (userName) userName.textContent = 'Olavo Maciel';
+                const userRole = document.querySelector('.sidebar-footer .user-details p');
+                if (userRole) userRole.textContent = 'Fisiologista Chefe';
 
-            // Auto-switch to medical tab if current active tab is hidden
-            const activeTabEl = document.querySelector('.tab-controller-links .nav-item.active');
-            const activeTab = activeTabEl ? activeTabEl.getAttribute('data-tab') : '';
-            if (activeTab !== 'dm') {
-                const dmTabButton = document.querySelector('.tab-controller-links .nav-item[data-tab="dm"]');
-                if (dmTabButton) {
-                    dmTabButton.click();
-                }
+                // Show database sync button for admin/physiologist
+                const syncBtn = document.getElementById('btn-sync-database');
+                if (syncBtn) syncBtn.style.display = 'inline-flex';
             }
-            
-            // Customize user profile display in footer
-            const userAvatar = document.querySelector('.sidebar-footer .avatar');
-            if (userAvatar) userAvatar.textContent = 'DM';
-            const userName = document.querySelector('.sidebar-footer .user-details h4');
-            if (userName) userName.textContent = 'Staff Médico';
-            const userRole = document.querySelector('.sidebar-footer .user-details p');
-            if (userRole) userRole.textContent = 'Departamento Médico';
-
-            // Hide database sync button for medical staff
-            const syncBtn = document.getElementById('btn-sync-database');
-            if (syncBtn) syncBtn.style.display = 'none';
         }
 
         // UTILS
